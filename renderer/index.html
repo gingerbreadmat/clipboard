@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clipboard Manager</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app">
+        <header class="header">
+            <div class="header-content">
+                <div class="search-container">
+                    <input type="text" id="search-input" placeholder="Search clipboard history..." autocomplete="off">
+                    <button id="clear-search" class="clear-btn" title="Clear search">×</button>
+                </div>
+                <button id="settings" class="settings-btn" title="Settings">
+                    <i class="fas fa-cog"></i>
+                </button>
+            </div>
+        </header>
+
+        <main class="main">
+            <div class="stats-bar">
+                <span id="item-count">0 items</span>
+            </div>
+
+            <div class="clipboard-list" id="clipboard-list">
+                <div class="empty-state" id="empty-state">
+                    <div class="empty-icon">📋</div>
+                    <h3>No clipboard history yet</h3>
+                    <p>Copy something to get started!</p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Context Menu -->
+    <div class="context-menu" id="context-menu">
+        <div class="context-item" data-action="copy">Copy</div>
+        <div class="context-item" data-action="pin">Pin</div>
+        <div class="context-item" data-action="delete">Delete</div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

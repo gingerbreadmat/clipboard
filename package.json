@@ -1,0 +1,51 @@
+{
+  "name": "clipboard-manager",
+  "version": "1.0.0",
+  "description": "A clipboard manager for macOS",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "build": "electron-builder",
+    "rebuild": "npx electron-rebuild",
+    "build-native": "node-gyp rebuild",
+    "postinstall": "npm run build-native"
+  },
+  "keywords": [
+    "clipboard",
+    "manager",
+    "productivity"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^27.0.0",
+    "electron-builder": "^24.6.4",
+    "electron-rebuild": "^3.2.9",
+    "node-gyp": "^10.0.0"
+  },
+  "dependencies": {
+    "better-sqlite3": "^9.0.0",
+    "electron-store": "^8.2.0",
+    "fuse.js": "^7.0.0",
+    "node-addon-api": "^7.0.0"
+  },
+  "build": {
+    "appId": "com.yourname.clipboard-manager",
+    "productName": "Clipboard Manager",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "renderer/**/*",
+      "src/**/*",
+      "package.json",
+      "build/Release/**/*"
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": "dmg"
+    }
+  }
+}

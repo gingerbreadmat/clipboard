@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clipboard Manager - Settings</title>
+    <style>
+        :root {
+            /* Light Theme */
+            --bg-primary: rgba(255, 255, 255, 0.95);
+            --bg-secondary: rgba(255, 255, 255, 0.8);
+            --bg-tertiary: rgba(248, 249, 250, 0.9);
+            --text-primary: #333;
+            --text-secondary: #666;
+            --text-tertiary: #888;
+            --border-color: rgba(0, 0, 0, 0.1);
+            --shadow-light: rgba(0, 0, 0, 0.05);
+            --shadow-medium: rgba(0, 0, 0, 0.1);
+            --accent-color: #007AFF;
+        }
+
+        [data-theme="dark"] {
+            /* Dark Theme */
+            --bg-primary: rgba(40, 40, 40, 0.95);
+            --bg-secondary: rgba(50, 50, 50, 0.9);
+            --bg-tertiary: rgba(60, 60, 60, 0.8);
+            --text-primary: #ffffff;
+            --text-secondary: #cccccc;
+            --text-tertiary: #999999;
+            --border-color: rgba(255, 255, 255, 0.1);
+            --shadow-light: rgba(0, 0, 0, 0.3);
+            --shadow-medium: rgba(0, 0, 0, 0.5);
+            --accent-color: #0A84FF;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            backdrop-filter: blur(20px);
+            color: var(--text-primary);
+            height: 100vh;
+            overflow: hidden;
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+
+        .settings-container {
+            padding: 30px;
+            height: 100vh;
+            overflow-y: auto;
+        }
+
+        .settings-header {
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .settings-header h1 {
+            font-size: 28px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+        }
+
+        .settings-header p {
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        .settings-section {
+            margin-bottom: 30px;
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 24px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 2px 10px var(--shadow-light);
+            transition: all 0.3s ease;
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: var(--text-primary);
+        }
+
+        .setting-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 0;
+            border-bottom: 1px solid var(--shadow-light);
+        }
+
+        .setting-item:last-child {
+            border-bottom: none;
+        }
+
+        .setting-label {
+            flex: 1;
+        }
+
+        .setting-label h3 {
+            font-size: 15px;
+            font-weight: 500;
+            margin-bottom: 4px;
+            color: var(--text-primary);
+        }
+
+        .setting-label p {
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.4;
+        }
+
+        .setting-control {
+            flex-shrink: 0;
+            margin-left: 20px;
+        }
+
+        /* Form Controls */
+        select, button {
+            font-family: inherit;
+            font-size: 14px;
+            transition: all 0.2s ease;
+        }
+
+        select {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            border: 2px solid var(--border-color);
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            min-width: 100px;
+        }
+
+        select:focus {
+            outline: none;
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
+        }
+
+        /* Button Styles */
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-weight: 500;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-danger {
+            background: #FF3B30;
+            color: white;
+        }
+
+        .btn-danger:hover:not(:disabled) {
+            background: #FF2D20;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(255, 59, 48, 0.3);
+        }
+
+        .btn-secondary {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background: var(--shadow-light);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px var(--shadow-medium);
+        }
+
+        .btn-quit {
+            background: #8E8E93;
+            color: white;
+        }
+
+        .btn-quit:hover:not(:disabled) {
+            background: #7C7C81;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(142, 142, 147, 0.3);
+        }
+
+        /* Scrollbar styling */
+        .settings-container::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .settings-container::-webkit-scrollbar-track {
+            background: var(--shadow-light);
+            border-radius: 3px;
+        }
+
+        .settings-container::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 3px;
+        }
+
+        .settings-container::-webkit-scrollbar-thumb:hover {
+            background: var(--text-tertiary);
+        }
+
+        /* Animations */
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .settings-section {
+            animation: fadeIn 0.4s ease;
+        }
+    </style>
+</head>
+<body>
+    <div class="settings-container">
+        <div class="settings-header">
+            <h1>Settings</h1>
+            <p>Clipboard Manager v1.0.0</p>
+        </div>
+
+        <div class="settings-section">
+            <h2 class="section-title">Layout</h2>
+            
+            <div class="setting-item">
+                <div class="setting-label">
+                    <h3>Window Position</h3>
+                    <p>Choose where the clipboard manager appears on screen</p>
+                </div>
+                <div class="setting-control">
+                    <select id="position-selector">
+                        <option value="left">Left Edge</option>
+                        <option value="right">Right Edge</option>
+                        <option value="top">Top Edge</option>
+                        <option value="bottom">Bottom Edge</option>
+                        <option value="window">Free Window</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="settings-section">
+            <h2 class="section-title">Appearance</h2>
+            
+            <div class="setting-item">
+                <div class="setting-label">
+                    <h3>Theme</h3>
+                    <p>Choose between light and dark mode</p>
+                </div>
+                <div class="setting-control">
+                    <select id="theme-selector">
+                        <option value="light">Light</option>
+                        <option value="dark">Dark</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="settings-section">
+            <h2 class="section-title">Storage</h2>
+            
+            <div class="setting-item">
+                <div class="setting-label">
+                    <h3>Clear All Clipboard Data</h3>
+                    <p>Permanently delete all clipboard history and pinned items</p>
+                </div>
+                <div class="setting-control">
+                    <button class="btn btn-danger" id="clear-all-data">Clear All Data</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="settings-section">
+            <h2 class="section-title">About</h2>
+            
+            <div class="setting-item">
+                <div class="setting-label">
+                    <h3>Keyboard Shortcut</h3>
+                    <p>⌘⇧V to show/hide clipboard manager</p>
+                </div>
+            </div>
+
+            <div class="setting-item">
+                <div class="setting-label">
+                    <h3>Database Location</h3>
+                    <p>Stored in your user data directory</p>
+                </div>
+                <div class="setting-control">
+                    <button class="btn btn-secondary" id="open-data-folder">Open Folder</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="settings-section">
+            <h2 class="section-title">Application</h2>
+            
+            <div class="setting-item">
+                <div class="setting-label">
+                    <h3>Quit Clipboard Manager</h3>
+                    <p>Close the application completely and stop clipboard monitoring</p>
+                </div>
+                <div class="setting-control">
+                    <button class="btn btn-quit" id="quit-app">Quit Application</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        console.log('🔧 Simple settings JavaScript loaded');
+        
+        const { ipcRenderer } = require('electron');
+        
+        document.addEventListener('DOMContentLoaded', async function() {
+            console.log('🔧 DOM loaded');
+            
+            // Load current theme and position
+            try {
+                const currentTheme = await ipcRenderer.invoke('get-current-theme');
+                console.log('🎨 Current theme loaded:', currentTheme);
+                document.getElementById('theme-selector').value = currentTheme;
+                applyTheme(currentTheme);
+
+                const currentPosition = await ipcRenderer.invoke('get-current-position');
+                console.log('📍 Current position loaded:', currentPosition);
+                document.getElementById('position-selector').value = currentPosition;
+            } catch (error) {
+                console.error('❌ Failed to load current settings:', error);
+            }
+            
+            const themeSelector = document.getElementById('theme-selector');
+            if (themeSelector) {
+                console.log('✅ Theme selector found');
+                
+                themeSelector.addEventListener('change', async function(e) {
+                    const selectedTheme = e.target.value;
+                    console.log('🎨 Theme changed to:', selectedTheme);
+                    
+                    try {
+                        const result = await ipcRenderer.invoke('set-theme', selectedTheme);
+                        console.log('✅ Theme set result:', result);
+                        applyTheme(selectedTheme);
+                    } catch (error) {
+                        console.error('❌ Failed to set theme:', error);
+                    }
+                });
+                
+                console.log('✅ Event listener attached');
+            } else {
+                console.error('❌ Theme selector not found');
+            }
+
+            // Position selector handler
+            const positionSelector = document.getElementById('position-selector');
+            if (positionSelector) {
+                console.log('✅ Position selector found');
+                
+                positionSelector.addEventListener('change', async function(e) {
+                    const selectedPosition = e.target.value;
+                    console.log('📍 Position changed to:', selectedPosition);
+                    
+                    try {
+                        const result = await ipcRenderer.invoke('set-window-position', selectedPosition);
+                        console.log('✅ Position set result:', result);
+                    } catch (error) {
+                        console.error('❌ Failed to set position:', error);
+                    }
+                });
+                
+                console.log('✅ Position event listener attached');
+            } else {
+                console.error('❌ Position selector not found');
+            }
+
+            // Listen for theme changes from other windows
+            ipcRenderer.on('theme-changed', (event, theme) => {
+                console.log('📨 Theme changed message received:', theme);
+                applyTheme(theme);
+                document.getElementById('theme-selector').value = theme;
+            });
+
+            // Clear All Data button
+            document.getElementById('clear-all-data').addEventListener('click', async () => {
+                if (confirm('Are you sure you want to clear all clipboard data? This cannot be undone.')) {
+                    try {
+                        console.log('🧹 Clearing all clipboard data...');
+                        await ipcRenderer.invoke('clear-clipboard-history');
+                        alert('All clipboard data has been cleared.');
+                        console.log('✅ Clipboard data cleared successfully');
+                    } catch (error) {
+                        console.error('❌ Failed to clear clipboard data:', error);
+                        alert('Failed to clear clipboard data.');
+                    }
+                }
+            });
+
+            // Open Data Folder button
+            document.getElementById('open-data-folder').addEventListener('click', async () => {
+                try {
+                    console.log('📁 Opening data folder...');
+                    await ipcRenderer.invoke('open-data-folder');
+                    console.log('✅ Data folder opened');
+                } catch (error) {
+                    console.error('❌ Failed to open data folder:', error);
+                }
+            });
+
+            // Quit Application button
+            document.getElementById('quit-app').addEventListener('click', async () => {
+                if (confirm('Are you sure you want to quit Clipboard Manager? This will stop clipboard monitoring.')) {
+                    try {
+                        console.log('💀 Quitting application...');
+                        
+                        // Send quit signal to main process
+                        const result = await ipcRenderer.invoke('quit-application');
+                        console.log('✅ Quit signal sent, result:', result);
+                        
+                        // Small delay to ensure the message is processed
+                        setTimeout(() => {
+                            console.log('🔄 Backup quit attempt...');
+                            // Backup method - tell main process we're really quitting
+                            ipcRenderer.send('force-quit');
+                        }, 100);
+                        
+                    } catch (error) {
+                        console.error('❌ Failed to quit application:', error);
+                        // Fallback - try to quit anyway
+                        try {
+                            ipcRenderer.send('force-quit');
+                        } catch (fallbackError) {
+                            console.error('❌ Fallback quit also failed:', fallbackError);
+                        }
+                    }
+                }
+            });
+        });
+
+        function applyTheme(theme) {
+            console.log('🎨 Applying theme:', theme);
+            document.documentElement.setAttribute('data-theme', theme);
+        }
+    </script>
+</body>
+</html>
