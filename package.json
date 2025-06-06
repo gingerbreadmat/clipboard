@@ -6,10 +6,16 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
-    "build": "electron-builder",
+    "build": "npm run rebuild && electron-builder",
+    "build:universal": "npm run rebuild:universal && electron-builder --mac --universal",
     "rebuild": "npx electron-rebuild",
+    "rebuild:universal": "npx electron-rebuild --arch=universal",
     "build-native": "node-gyp rebuild",
-    "postinstall": "npm run build-native"
+    "build-native:universal": "node-gyp rebuild --arch=arm64 && node-gyp rebuild --arch=x64",
+    "postinstall": "npm run build-native",
+    "dist": "npm run build",
+    "pack": "electron-builder --dir",
+    "pack:universal": "electron-builder --dir --mac --universal"
   },
   "keywords": [
     "clipboard",
@@ -19,6 +25,8 @@
   "author": "Your Name",
   "license": "MIT",
   "devDependencies": {
+    "@electron/notarize": "^2.5.0",
+    "dmg-builder": "^24.13.3",
     "electron": "^27.0.0",
     "electron-builder": "^24.6.4",
     "electron-rebuild": "^3.2.9",
@@ -38,14 +46,74 @@
     },
     "files": [
       "main.js",
+      "preload.js",
       "renderer/**/*",
       "src/**/*",
       "package.json",
-      "build/Release/**/*"
+      "build/Release/**/*",
+      "node_modules/**/*",
+      "!node_modules/**/*.{md,txt}",
+      "!node_modules/**/test/**/*",
+      "!node_modules/**/tests/**/*",
+      "!node_modules/**/*.map"
+    ],
+    "extraFiles": [
+      {
+        "from": "build/Release/",
+        "to": "Resources/app.asar.unpacked/build/Release/",
+        "filter": [
+          "**/*"
+        ]
+      }
     ],
     "mac": {
       "category": "public.app-category.productivity",
-      "target": "dmg"
-    }
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        }
+      ],
+      "entitlements": "entitlements.mac.plist",
+      "entitlementsInherit": "entitlements.mac.plist",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "icon": "assets/icon.icns",
+      "minimumSystemVersion": "10.15.0",
+      "extendInfo": {
+        "NSAppleEventsUsageDescription": "This app needs access to control other applications for clipboard functionality.",
+        "NSSystemAdministrationUsageDescription": "This app needs administrative access for clipboard monitoring."
+      }
+    },
+    "dmg": {
+      "title": "Clipboard Manager",
+      "icon": "assets/icon.icns",
+      "background": "assets/dmg-background.png",
+      "window": {
+        "width": 540,
+        "height": 380
+      },
+      "contents": [
+        {
+          "x": 140,
+          "y": 150,
+          "type": "file"
+        },
+        {
+          "x": 400,
+          "y": 150,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    },
+    "asarUnpack": [
+      "build/Release/**/*",
+      "node_modules/better-sqlite3/**/*"
+    ],
+    "afterSign": "scripts/notarize.js",
+    "publish": null
   }
 }
