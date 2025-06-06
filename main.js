@@ -1,3 +1,5 @@
+// Enhanced main.js with proper dock cleanup
+
 const { app } = require('electron');
 const path = require('path');
 
@@ -29,6 +31,9 @@ class ClipboardManagerApp {
     this.trayManager = null;
     this.clipboardMonitor = null;
     
+    // Track cleanup state
+    this.isCleaningUp = false;
+    
     // Setup app event handlers
     this.setupAppEventHandlers();
   }
@@ -52,6 +57,7 @@ class ClipboardManagerApp {
       console.log('🎉 Clipboard Manager fully initialized!');
     } catch (error) {
       console.error('❌ Failed to initialize Clipboard Manager:', error);
+      await this.emergencyCleanup();
       app.quit();
     }
   }
@@ -104,7 +110,7 @@ class ClipboardManagerApp {
     
     // Initialize window manager
     this.windowManager = new WindowManager(this.settingsService, this.dockService);
-    this.windowManager.createMainWindow();
+    await this.windowManager.createMainWindow();
     console.log('✅ Window manager initialized');
     
     // Initialize tray manager
@@ -169,7 +175,7 @@ class ClipboardManagerApp {
       // Keep app running in background on macOS
       if (process.platform !== 'darwin') {
         console.log('💀 Quitting app (non-macOS)');
-        app.quit();
+        this.cleanup();
       }
     });
 
@@ -182,8 +188,12 @@ class ClipboardManagerApp {
     });
 
     // App will quit event
-    app.on('will-quit', () => {
-      this.cleanup();
+    app.on('will-quit', (event) => {
+      if (!this.isCleaningUp) {
+        console.log('🚨 App will quit - preventing and starting cleanup...');
+        event.preventDefault();
+        this.cleanup();
+      }
     });
 
     // Handle second instance (prevent multiple instances)
@@ -193,13 +203,41 @@ class ClipboardManagerApp {
         this.windowManager.showMainWindow();
       }
     });
+
+    // Handle unexpected exits
+    process.on('SIGINT', () => {
+      console.log('🚨 SIGINT received, cleaning up...');
+      this.cleanup();
+    });
+
+    process.on('SIGTERM', () => {
+      console.log('🚨 SIGTERM received, cleaning up...');
+      this.cleanup();
+    });
+
+    // Handle uncaught exceptions
+    process.on('uncaughtException', (error) => {
+      console.error('🚨 Uncaught exception:', error);
+      this.emergencyCleanup();
+    });
+
+    process.on('unhandledRejection', (reason, promise) => {
+      console.error('🚨 Unhandled promise rejection:', reason);
+      this.emergencyCleanup();
+    });
   }
 
-  cleanup() {
-    console.log('💀 App will quit, cleaning up...');
+  async cleanup() {
+    if (this.isCleaningUp) {
+      console.log('🔄 Cleanup already in progress...');
+      return;
+    }
+
+    this.isCleaningUp = true;
+    console.log('💀 App cleanup starting...');
     
     try {
-      // Unregister all shortcuts
+      // Unregister all shortcuts first
       if (this.shortcutManager) {
         this.shortcutManager.unregisterAllShortcuts();
         console.log('⌨️ Global shortcuts unregistered');
@@ -209,6 +247,12 @@ class ClipboardManagerApp {
       if (this.clipboardMonitor) {
         this.clipboardMonitor.stop();
         console.log('📋 Clipboard monitor stopped');
+      }
+
+      // Window manager cleanup (includes dock restoration)
+      if (this.windowManager) {
+        await this.windowManager.cleanup();
+        console.log('📱 Window manager cleaned up');
       }
 
       // Close storage
@@ -229,9 +273,47 @@ class ClipboardManagerApp {
         console.log('🔗 IPC handlers removed');
       }
 
-      console.log('✅ Cleanup completed');
+      console.log('✅ Cleanup completed successfully');
+      
+      // Now it's safe to quit
+      app.isQuiting = true;
+      app.quit();
+      
     } catch (error) {
       console.error('❌ Error during cleanup:', error);
+      // Force emergency cleanup if normal cleanup fails
+      await this.emergencyCleanup();
+    }
+  }
+
+  async emergencyCleanup() {
+    console.log('🚨 Emergency cleanup initiated...');
+    
+    try {
+      // Try to restore dock state immediately
+      if (this.dockService) {
+        console.log('🏠 Emergency dock restoration...');
+        await this.dockService.resetDockToDefaults();
+      }
+      
+      // Force quit shortcuts
+      if (this.shortcutManager) {
+        try {
+          this.shortcutManager.unregisterAllShortcuts();
+        } catch (error) {
+          console.error('Emergency shortcut cleanup failed:', error);
+        }
+      }
+      
+      console.log('✅ Emergency cleanup completed');
+    } catch (error) {
+      console.error('❌ Emergency cleanup failed:', error);
+    } finally {
+      // Force quit no matter what
+      setTimeout(() => {
+        app.isQuiting = true;
+        app.exit(0);
+      }, 1000);
     }
   }
 
@@ -246,6 +328,10 @@ class ClipboardManagerApp {
 
   getSettingsService() {
     return this.settingsService;
+  }
+
+  getDockService() {
+    return this.dockService;
   }
 }
 

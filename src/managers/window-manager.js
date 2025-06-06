@@ -1,8 +1,14 @@
-// Enhanced src/managers/window-manager.js with cursor-aware positioning
+// Complete Enhanced src/managers/window-manager.js with dock position awareness
 
 const { BrowserWindow, screen } = require('electron');
 const path = require('path');
 
+/**
+ * WindowManager - Handles window positioning and dock interaction
+ * 
+ * Current behavior: All edge positions (left, right, top, bottom) cover the dock
+ * TODO: Add user toggle setting to control dock covering behavior
+ */
 class WindowManager {
   constructor(settingsService, dockService) {
     this.settingsService = settingsService;
@@ -10,7 +16,9 @@ class WindowManager {
     this.mainWindow = null;
     this.settingsWindow = null;
     this.nativeWindowManager = null;
-    this.currentDisplay = null; // Track which display we're on
+    this.currentDisplay = null;
+    this.originalDockState = null; // Track original dock state
+    this.dockWasHiddenByUs = false; // Track if we hid the dock
     
     // Try to load native window manager
     try {
@@ -21,8 +29,11 @@ class WindowManager {
     }
   }
 
-  createMainWindow() {
+  async createMainWindow() {
     console.log('📱 Creating main window...');
+    
+    // Store original dock state
+    await this.storeOriginalDockState();
     
     // Get cursor position to determine which display to use
     const cursorPosition = screen.getCursorScreenPoint();
@@ -37,14 +48,14 @@ class WindowManager {
     const storedPosition = this.settingsService.getWindowPosition();
     console.log('📍 Using stored position:', storedPosition);
     
-    // Get current theme to set correct background - THIS PREVENTS THE FLASH
+    // Get current theme to set correct background
     const currentTheme = this.settingsService.getTheme();
     const backgroundColor = currentTheme === 'dark' ? '#282828' : '#ffffff';
     
     console.log('🎨 Setting background color:', backgroundColor, 'for theme:', currentTheme);
     
-    // Calculate initial bounds based on cursor location
-    const initialBounds = this.calculateCursorAwareBounds(storedPosition, targetDisplay, cursorPosition);
+    // Calculate initial bounds based on cursor location and dock position
+    const initialBounds = await this.calculateDockAwareBounds(storedPosition, targetDisplay, cursorPosition);
     
     this.mainWindow = new BrowserWindow({
       ...initialBounds,
@@ -60,8 +71,8 @@ class WindowManager {
         contextIsolation: false
       },
       frame: false,
-      transparent: false, // IMPORTANT: Set to false so backgroundColor works
-      backgroundColor: backgroundColor, // THIS PREVENTS THE FLASH
+      transparent: false,
+      backgroundColor: backgroundColor,
       vibrancy: 'sidebar',
       alwaysOnTop: true,
       skipTaskbar: true,
@@ -76,6 +87,331 @@ class WindowManager {
     this.setupMainWindowEventHandlers();
     
     return this.mainWindow;
+  }
+
+  async storeOriginalDockState() {
+    try {
+      // Use cached dock info for faster startup
+      const dockInfo = await this.dockService.getDockInfo();
+      this.originalDockState = {
+        hidden: dockInfo.hidden,
+        position: dockInfo.position,
+        size: dockInfo.size
+      };
+      console.log('💾 Stored original dock state:', this.originalDockState);
+    } catch (error) {
+      console.log('⚠️ Could not detect dock state, using defaults:', error.message);
+      this.originalDockState = { hidden: false, position: 'bottom', size: 64 };
+    }
+  }
+
+  async calculateDockAwareBounds(position, display, cursorPosition) {
+    // Validate inputs
+    if (!display || !display.bounds) {
+      console.error('❌ Invalid display object');
+      return null;
+    }
+    
+    const { x: screenX, y: screenY, width: screenWidth, height: screenHeight } = display.bounds;
+    
+    // For now, ALWAYS use full screen space - clipboard covers dock
+    // TODO: Later this will be controlled by a user toggle setting
+    let availableSpace = {
+      x: screenX,
+      y: screenY,
+      width: screenWidth,
+      height: screenHeight
+    };
+    
+    console.log(`📐 Using full screen space (covering dock): ${availableSpace.width}x${availableSpace.height} at (${availableSpace.x}, ${availableSpace.y})`);
+    
+    const sidebarWidth = 350;
+    const popupWidth = 400;
+    const popupHeight = 600;
+    
+    let bounds = null;
+    
+    try {
+      switch (position) {
+        case 'cursor':
+          bounds = this.calculateCursorProximityBounds(cursorPosition, availableSpace, popupWidth, popupHeight);
+          break;
+          
+        case 'cursor-edge':
+          bounds = this.calculateNearestEdgeBounds(cursorPosition, availableSpace, sidebarWidth);
+          break;
+          
+        case 'left':
+          // Use full screen height, covering dock
+          bounds = {
+            x: Math.round(screenX),
+            y: Math.round(screenY),
+            width: Math.round(sidebarWidth),
+            height: Math.round(screenHeight)
+          };
+          break;
+          
+        case 'right':
+          // Use full screen height, covering dock
+          bounds = {
+            x: Math.round(screenX + screenWidth - sidebarWidth),
+            y: Math.round(screenY),
+            width: Math.round(sidebarWidth),
+            height: Math.round(screenHeight)
+          };
+          break;
+          
+        case 'top':
+          // Use full screen width, covering dock
+          bounds = {
+            x: Math.round(screenX),
+            y: Math.round(screenY),
+            width: Math.round(screenWidth),
+            height: 300
+          };
+          break;
+          
+        case 'bottom':
+          // Use full screen width, covering dock
+          bounds = {
+            x: Math.round(screenX),
+            y: Math.round(screenY + screenHeight - 300),
+            width: Math.round(screenWidth),
+            height: 300
+          };
+          break;
+          
+        case 'window':
+          bounds = {
+            x: Math.round(availableSpace.x + (availableSpace.width - popupWidth) / 2),
+            y: Math.round(availableSpace.y + (availableSpace.height - popupHeight) / 2),
+            width: Math.round(popupWidth),
+            height: Math.round(popupHeight)
+          };
+          break;
+          
+        default:
+          bounds = {
+            x: Math.round(screenX),
+            y: Math.round(screenY),
+            width: Math.round(sidebarWidth),
+            height: Math.round(screenHeight)
+          };
+          break;
+      }
+      
+      // Final validation of calculated bounds
+      if (bounds && this.isValidBounds(bounds)) {
+        console.log(`✅ Calculated bounds (covering dock): ${bounds.width}x${bounds.height} at (${bounds.x}, ${bounds.y})`);
+        return bounds;
+      } else {
+        console.error('❌ Calculated bounds are invalid:', bounds);
+        return null;
+      }
+      
+    } catch (error) {
+      console.error('❌ Error calculating bounds:', error);
+      return null;
+    }
+  }
+
+  async calculateBottomBoundsWithDockConflict(availableSpace, screenX, screenY, screenWidth, screenHeight) {
+    // This method is now simplified since bottom position always covers dock
+    console.log('🏠 Bottom position: using full screen width to cover dock');
+    
+    return {
+      x: Math.round(screenX),
+      y: Math.round(screenY + screenHeight - 300),
+      width: Math.round(screenWidth),
+      height: 300
+    };
+  }
+
+  calculateCursorProximityBounds(cursorPosition, availableSpace, windowWidth, windowHeight) {
+    const margin = 20;
+    
+    if (!cursorPosition || typeof cursorPosition.x !== 'number' || typeof cursorPosition.y !== 'number') {
+      console.warn('⚠️ Invalid cursor position, using available space center');
+      cursorPosition = {
+        x: availableSpace.x + availableSpace.width / 2,
+        y: availableSpace.y + availableSpace.height / 2
+      };
+    }
+    
+    let x = Math.round(cursorPosition.x + margin);
+    let y = Math.round(cursorPosition.y + margin);
+    
+    // Adjust if window would go off available space
+    if (x + windowWidth > availableSpace.x + availableSpace.width) {
+      x = Math.round(cursorPosition.x - windowWidth - margin);
+    }
+    
+    if (y + windowHeight > availableSpace.y + availableSpace.height) {
+      y = Math.round(cursorPosition.y - windowHeight - margin);
+    }
+    
+    // Ensure window stays within available space
+    const padding = 10;
+    x = Math.max(availableSpace.x + padding, Math.min(x, availableSpace.x + availableSpace.width - windowWidth - padding));
+    y = Math.max(availableSpace.y + padding, Math.min(y, availableSpace.y + availableSpace.height - windowHeight - padding));
+    
+    console.log(`🎯 Cursor proximity bounds (dock-aware): ${windowWidth}x${windowHeight} at (${x}, ${y})`);
+    
+    return { x, y, width: windowWidth, height: windowHeight };
+  }
+
+  calculateNearestEdgeBounds(cursorPosition, availableSpace, sidebarWidth) {
+    if (!cursorPosition || typeof cursorPosition.x !== 'number' || typeof cursorPosition.y !== 'number') {
+      console.warn('⚠️ Invalid cursor position, defaulting to left edge');
+      return {
+        x: availableSpace.x,
+        y: availableSpace.y,
+        width: Math.round(sidebarWidth),
+        height: Math.round(availableSpace.height)
+      };
+    }
+    
+    // Calculate distances to each edge of available space
+    const distanceToLeft = Math.abs(cursorPosition.x - availableSpace.x);
+    const distanceToRight = Math.abs((availableSpace.x + availableSpace.width) - cursorPosition.x);
+    const distanceToTop = Math.abs(cursorPosition.y - availableSpace.y);
+    const distanceToBottom = Math.abs((availableSpace.y + availableSpace.height) - cursorPosition.y);
+    
+    const minDistance = Math.min(distanceToLeft, distanceToRight, distanceToTop, distanceToBottom);
+    
+    console.log(`📏 Distances (dock-aware) - Left: ${distanceToLeft}, Right: ${distanceToRight}, Top: ${distanceToTop}, Bottom: ${distanceToBottom}`);
+    
+    if (minDistance === distanceToLeft) {
+      console.log('🎯 Nearest edge: LEFT (dock-aware)');
+      return {
+        x: Math.round(availableSpace.x),
+        y: Math.round(availableSpace.y),
+        width: Math.round(sidebarWidth),
+        height: Math.round(availableSpace.height)
+      };
+    } else if (minDistance === distanceToRight) {
+      console.log('🎯 Nearest edge: RIGHT (dock-aware)');
+      return {
+        x: Math.round(availableSpace.x + availableSpace.width - sidebarWidth),
+        y: Math.round(availableSpace.y),
+        width: Math.round(sidebarWidth),
+        height: Math.round(availableSpace.height)
+      };
+    } else if (minDistance === distanceToTop) {
+      console.log('🎯 Nearest edge: TOP (dock-aware)');
+      return {
+        x: Math.round(availableSpace.x),
+        y: Math.round(availableSpace.y),
+        width: Math.round(availableSpace.width),
+        height: 300
+      };
+    } else {
+      console.log('🎯 Nearest edge: BOTTOM (dock-aware)');
+      return {
+        x: Math.round(availableSpace.x),
+        y: Math.round(availableSpace.y + availableSpace.height - 300),
+        width: Math.round(availableSpace.width),
+        height: 300
+      };
+    }
+  }
+
+  async applyDisplaySpecificPositioning(position, display) {
+    console.log('🔧 Applying display specific positioning:', position);
+    
+    // For now, ALL clipboard positions cover the dock
+    // TODO: Later this will be controlled by a user toggle setting
+    
+    // Skip dock covering for cursor and window modes (they're floating)
+    if (position === 'cursor' || position === 'window') {
+      console.log('🔧 Floating position, using normal window level');
+      await this.restoreDockIfHiddenByUs();
+      this.mainWindow.setAlwaysOnTop(true, 'screen-saver');
+      return;
+    }
+    
+    console.log('🏠 Edge position: will cover dock using high window level');
+    
+    if (this.nativeWindowManager && process.platform === 'darwin') {
+      console.log('🔧 Attempting native positioning over dock');
+      
+      const bounds = this.mainWindow.getBounds();
+      
+      setTimeout(async () => {
+        try {
+          const windowId = this.mainWindow.getNativeWindowHandle().readInt32LE(0);
+          const success = this.nativeWindowManager.forceWindowOverDock(
+            windowId, bounds.x, bounds.y, bounds.width, bounds.height
+          );
+          
+          if (success) {
+            console.log('✅ Successfully positioned window over dock using native APIs');
+            return;
+          } else {
+            console.log('❌ Native positioning failed, using high window level');
+            this.mainWindow.setAlwaysOnTop(true, 'pop-up-menu');
+          }
+        } catch (error) {
+          console.log('⚠️ Native positioning error, using high window level:', error.message);
+          this.mainWindow.setAlwaysOnTop(true, 'pop-up-menu');
+        }
+      }, 50);
+    } else {
+      console.log('🔧 Using high window level to cover dock');
+      this.mainWindow.setAlwaysOnTop(true, 'pop-up-menu');
+    }
+  }
+
+  async forceWindowOverDock() {
+    console.log('🏠 Forcing window to cover dock');
+    
+    try {
+      const success = await this.dockService.setDockVisibility(false);
+      if (success) {
+        this.dockWasHiddenByUs = true;
+        this.mainWindow.setAlwaysOnTop(true, 'pop-up-menu');
+        console.log('✅ Dock hidden successfully, window will cover dock area');
+      } else {
+        console.log('⚠️ Could not hide dock, using high window level');
+        this.mainWindow.setAlwaysOnTop(true, 'pop-up-menu');
+      }
+    } catch (error) {
+      console.log('⚠️ Error hiding dock, using high window level:', error.message);
+      this.mainWindow.setAlwaysOnTop(true, 'pop-up-menu');
+    }
+  }
+
+  async restoreDockIfHiddenByUs() {
+    if (this.dockWasHiddenByUs) {
+      console.log('🏠 Restoring dock that we previously hid');
+      
+      try {
+        const success = await this.dockService.setDockVisibility(true);
+        if (success) {
+          this.dockWasHiddenByUs = false;
+          console.log('✅ Dock restored successfully');
+        } else {
+          console.log('⚠️ Could not restore dock');
+        }
+      } catch (error) {
+        console.log('⚠️ Error restoring dock:', error.message);
+      }
+    }
+  }
+
+  async restoreOriginalDockState() {
+    console.log('🔄 Restoring original dock state...');
+    
+    if (this.originalDockState) {
+      try {
+        // Restore to original visibility state
+        await this.dockService.setDockVisibility(!this.originalDockState.hidden);
+        this.dockWasHiddenByUs = false;
+        console.log('✅ Original dock state restored');
+      } catch (error) {
+        console.log('⚠️ Could not restore original dock state:', error.message);
+      }
+    }
   }
 
   getDisplayAtCursor(cursorPosition) {
@@ -94,209 +430,7 @@ class WindowManager {
     return targetDisplay || screen.getPrimaryDisplay();
   }
 
-  calculateCursorAwareBounds(position, display, cursorPosition) {
-    // Validate inputs
-    if (!display || !display.bounds) {
-      console.error('❌ Invalid display object');
-      return null;
-    }
-    
-    const { x: screenX, y: screenY, width: screenWidth, height: screenHeight } = display.bounds;
-    const { x: workX, y: workY, width: workWidth, height: workHeight } = display.workArea || display.bounds;
-    
-    // Validate display bounds
-    if (!Number.isFinite(screenX) || !Number.isFinite(screenY) || !Number.isFinite(screenWidth) || !Number.isFinite(screenHeight)) {
-      console.error('❌ Invalid display bounds:', display.bounds);
-      return null;
-    }
-    
-    const sidebarWidth = 350;
-    const sidebarHeight = screenHeight;
-    const popupWidth = 400;
-    const popupHeight = 600;
-    
-    console.log(`📐 Display bounds: ${screenWidth}x${screenHeight} at (${screenX}, ${screenY})`);
-    console.log(`💼 Work area: ${workWidth}x${workHeight} at (${workX}, ${workY})`);
-    
-    let bounds = null;
-    
-    try {
-      switch (position) {
-        case 'cursor':
-          // New mode: Open near cursor with smart positioning
-          bounds = this.calculateCursorProximityBounds(cursorPosition, display, popupWidth, popupHeight);
-          break;
-          
-        case 'cursor-edge':
-          // New mode: Open at nearest edge to cursor
-          bounds = this.calculateNearestEdgeBounds(cursorPosition, display, sidebarWidth);
-          break;
-          
-        case 'right':
-          bounds = {
-            x: Math.round(screenX + screenWidth - sidebarWidth),
-            y: Math.round(screenY),
-            width: Math.round(sidebarWidth),
-            height: Math.round(sidebarHeight)
-          };
-          break;
-          
-        case 'top':
-          bounds = {
-            x: Math.round(screenX),
-            y: Math.round(workY), // Use work area to avoid menu bar
-            width: Math.round(screenWidth),
-            height: 300
-          };
-          break;
-          
-        case 'bottom':
-          bounds = {
-            x: Math.round(screenX),
-            y: Math.round(screenY + screenHeight - 300),
-            width: Math.round(screenWidth),
-            height: 300
-          };
-          break;
-          
-        case 'window':
-          // Center on the display where cursor is
-          bounds = {
-            x: Math.round(screenX + (screenWidth - popupWidth) / 2),
-            y: Math.round(screenY + (screenHeight - popupHeight) / 2),
-            width: Math.round(popupWidth),
-            height: Math.round(popupHeight)
-          };
-          break;
-          
-        default: // 'left'
-          bounds = {
-            x: Math.round(screenX),
-            y: Math.round(screenY),
-            width: Math.round(sidebarWidth),
-            height: Math.round(sidebarHeight)
-          };
-          break;
-      }
-      
-      // Final validation of calculated bounds
-      if (bounds && this.isValidBounds(bounds)) {
-        return bounds;
-      } else {
-        console.error('❌ Calculated bounds are invalid:', bounds);
-        return null;
-      }
-      
-    } catch (error) {
-      console.error('❌ Error calculating cursor aware bounds:', error);
-      return null;
-    }
-  }
-
-  calculateCursorProximityBounds(cursorPosition, display, windowWidth, windowHeight) {
-    const { x: screenX, y: screenY, width: screenWidth, height: screenHeight } = display.bounds;
-    const margin = 20; // Distance from cursor
-    
-    // Ensure cursor position is valid
-    if (!cursorPosition || typeof cursorPosition.x !== 'number' || typeof cursorPosition.y !== 'number') {
-      console.warn('⚠️ Invalid cursor position, using display center');
-      cursorPosition = {
-        x: screenX + screenWidth / 2,
-        y: screenY + screenHeight / 2
-      };
-    }
-    
-    // Default position: bottom-right of cursor
-    let x = Math.round(cursorPosition.x + margin);
-    let y = Math.round(cursorPosition.y + margin);
-    
-    // Adjust if window would go off-screen
-    if (x + windowWidth > screenX + screenWidth) {
-      x = Math.round(cursorPosition.x - windowWidth - margin); // Place to the left instead
-    }
-    
-    if (y + windowHeight > screenY + screenHeight) {
-      y = Math.round(cursorPosition.y - windowHeight - margin); // Place above instead
-    }
-    
-    // Ensure window stays within screen bounds with some padding
-    const padding = 10;
-    x = Math.max(screenX + padding, Math.min(x, screenX + screenWidth - windowWidth - padding));
-    y = Math.max(screenY + padding, Math.min(y, screenY + screenHeight - windowHeight - padding));
-    
-    // Final validation
-    x = Math.round(x);
-    y = Math.round(y);
-    windowWidth = Math.round(windowWidth);
-    windowHeight = Math.round(windowHeight);
-    
-    console.log(`🎯 Cursor proximity bounds: ${windowWidth}x${windowHeight} at (${x}, ${y})`);
-    
-    return { x, y, width: windowWidth, height: windowHeight };
-  }
-
-  calculateNearestEdgeBounds(cursorPosition, display, sidebarWidth) {
-    const { x: screenX, y: screenY, width: screenWidth, height: screenHeight } = display.bounds;
-    
-    // Ensure cursor position is valid
-    if (!cursorPosition || typeof cursorPosition.x !== 'number' || typeof cursorPosition.y !== 'number') {
-      console.warn('⚠️ Invalid cursor position, defaulting to left edge');
-      return {
-        x: screenX,
-        y: screenY,
-        width: Math.round(sidebarWidth),
-        height: Math.round(screenHeight)
-      };
-    }
-    
-    // Calculate distances to each edge
-    const distanceToLeft = Math.abs(cursorPosition.x - screenX);
-    const distanceToRight = Math.abs((screenX + screenWidth) - cursorPosition.x);
-    const distanceToTop = Math.abs(cursorPosition.y - screenY);
-    const distanceToBottom = Math.abs((screenY + screenHeight) - cursorPosition.y);
-    
-    // Find the nearest edge
-    const minDistance = Math.min(distanceToLeft, distanceToRight, distanceToTop, distanceToBottom);
-    
-    console.log(`📏 Distances - Left: ${distanceToLeft}, Right: ${distanceToRight}, Top: ${distanceToTop}, Bottom: ${distanceToBottom}`);
-    
-    if (minDistance === distanceToLeft) {
-      console.log('🎯 Nearest edge: LEFT');
-      return {
-        x: Math.round(screenX),
-        y: Math.round(screenY),
-        width: Math.round(sidebarWidth),
-        height: Math.round(screenHeight)
-      };
-    } else if (minDistance === distanceToRight) {
-      console.log('🎯 Nearest edge: RIGHT');
-      return {
-        x: Math.round(screenX + screenWidth - sidebarWidth),
-        y: Math.round(screenY),
-        width: Math.round(sidebarWidth),
-        height: Math.round(screenHeight)
-      };
-    } else if (minDistance === distanceToTop) {
-      console.log('🎯 Nearest edge: TOP');
-      return {
-        x: Math.round(screenX),
-        y: Math.round(screenY),
-        width: Math.round(screenWidth),
-        height: 300
-      };
-    } else {
-      console.log('🎯 Nearest edge: BOTTOM');
-      return {
-        x: Math.round(screenX),
-        y: Math.round(screenY + screenHeight - 300),
-        width: Math.round(screenWidth),
-        height: 300
-      };
-    }
-  }
-
-  // New method to update window position based on current cursor location
-  repositionToCursor() {
+  async repositionToCursor() {
     if (!this.mainWindow) return;
     
     console.log('🖱️ Repositioning window to cursor location and current desktop...');
@@ -312,7 +446,7 @@ class WindowManager {
         this.currentDisplay = targetDisplay;
       }
       
-      const newBounds = this.calculateCursorAwareBounds(currentPosition, targetDisplay, cursorPosition);
+      const newBounds = await this.calculateDockAwareBounds(currentPosition, targetDisplay, cursorPosition);
       
       // Validate bounds before setting
       if (this.isValidBounds(newBounds)) {
@@ -323,10 +457,10 @@ class WindowManager {
           // Force window to current space
           this.mainWindow.setVisibleOnAllWorkspaces(false);
           this.mainWindow.setBounds(newBounds);
-          this.applyDisplaySpecificPositioning(currentPosition, targetDisplay);
+          await this.applyDisplaySpecificPositioning(currentPosition, targetDisplay);
         } else {
           this.mainWindow.setBounds(newBounds);
-          this.applyDisplaySpecificPositioning(currentPosition, targetDisplay);
+          await this.applyDisplaySpecificPositioning(currentPosition, targetDisplay);
         }
         
       } else {
@@ -372,97 +506,8 @@ class WindowManager {
     }
   }
 
-  applyDisplaySpecificPositioning(position, display) {
-    // Handle special cases like bottom positioning that might need dock management
-    if (position === 'bottom') {
-      console.log('🏠 Applying bottom positioning with dock management');
-      
-      if (this.nativeWindowManager && process.platform === 'darwin') {
-        console.log('🔧 Using native APIs for bottom positioning');
-        
-        const { x: screenX, y: screenY, width: screenWidth, height: screenHeight } = display.bounds;
-        const bounds = {
-          x: screenX,
-          y: screenY + screenHeight - 300,
-          width: screenWidth,
-          height: 300
-        };
-        
-        setTimeout(() => {
-          try {
-            const windowId = this.mainWindow.getNativeWindowHandle().readInt32LE(0);
-            const success = this.nativeWindowManager.forceWindowOverDock(
-              windowId, bounds.x, bounds.y, bounds.width, bounds.height
-            );
-            
-            if (success) {
-              console.log('✅ Successfully positioned window over dock');
-            } else {
-              console.log('❌ Native positioning failed, using dock hiding');
-              this.mainWindow.setAlwaysOnTop(true, 'pop-up-menu');
-              this.dockService.setDockVisibility(false);
-            }
-          } catch (error) {
-            console.error('❌ Error with native positioning:', error);
-            this.mainWindow.setAlwaysOnTop(true, 'pop-up-menu');
-            this.dockService.setDockVisibility(false);
-          }
-        }, 100);
-      } else {
-        console.log('🔧 Using dock hiding for bottom positioning');
-        this.mainWindow.setAlwaysOnTop(true, 'pop-up-menu');
-        this.dockService.setDockVisibility(false);
-      }
-    } else {
-      // For non-bottom positions, restore dock and use normal window level
-      this.dockService.setDockVisibility(true);
-      this.mainWindow.setAlwaysOnTop(true, 'screen-saver');
-    }
-  }
-
-  applyBottomPositioning(display) {
-    const { x: screenX, y: screenY, width: screenWidth, height: screenHeight } = display.bounds;
-    const bottomBarHeight = 300;
-    
-    if (this.nativeWindowManager && process.platform === 'darwin') {
-      console.log('🔧 Using native APIs for bottom positioning');
-      
-      const bounds = {
-        x: screenX,
-        y: screenY + screenHeight - bottomBarHeight,
-        width: screenWidth,
-        height: bottomBarHeight
-      };
-      
-      setTimeout(() => {
-        try {
-          const windowId = this.mainWindow.getNativeWindowHandle().readInt32LE(0);
-          const success = this.nativeWindowManager.forceWindowOverDock(
-            windowId, bounds.x, bounds.y, bounds.width, bounds.height
-          );
-          
-          if (success) {
-            console.log('✅ Successfully positioned window over dock');
-          } else {
-            console.log('❌ Native positioning failed, using dock hiding');
-            this.mainWindow.setAlwaysOnTop(true, 'pop-up-menu');
-            this.dockService.setDockVisibility(false);
-          }
-        } catch (error) {
-          console.error('❌ Error with native positioning:', error);
-          this.mainWindow.setAlwaysOnTop(true, 'pop-up-menu');
-          this.dockService.setDockVisibility(false);
-        }
-      }, 100);
-    } else {
-      console.log('🔧 Using dock hiding for bottom positioning');
-      this.mainWindow.setAlwaysOnTop(true, 'pop-up-menu');
-      this.dockService.setDockVisibility(false);
-    }
-  }
-
   // Enhanced show method that recreates window on current desktop but keeps it simple
-  showMainWindow() {
+  async showMainWindow() {
     if (this.mainWindow) {
       console.log('👁️ Showing main window...');
       
@@ -473,33 +518,25 @@ class WindowManager {
         this.mainWindow = null;
         
         // Recreate immediately
-        this.createMainWindow();
+        await this.createMainWindow();
         
-        // Show when ready but keep invisible until content is fully positioned
+        // Show when ready with faster, simpler animation
         this.mainWindow.once('ready-to-show', () => {
-          // Show but make completely invisible
-          this.mainWindow.setOpacity(0);
+          // Show immediately but start with low opacity
+          this.mainWindow.setOpacity(0.3);
           this.mainWindow.show();
           
-          // Wait for content to load and settle, then fade in
+          // Quick fade in - much faster than before
           setTimeout(() => {
-            // Gradually increase opacity to avoid any jarring appearance
-            let opacity = 0;
-            const fadeIn = setInterval(() => {
-              opacity += 0.2;
-              if (opacity >= 1) {
-                opacity = 1;
-                clearInterval(fadeIn);
-              }
-              this.mainWindow.setOpacity(opacity);
-            }, 20); // 20ms intervals for smooth fade
-            
-            this.mainWindow.focus();
-          }, 400); // Even longer delay - 400ms
+            if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+              this.mainWindow.setOpacity(1);
+              this.mainWindow.focus();
+            }
+          }, 100); // Much faster - was 400ms
         });
       } else {
         // Non-macOS: just reposition and show
-        this.repositionToCursor();
+        await this.repositionToCursor();
         this.mainWindow.show();
         this.mainWindow.focus();
       }
@@ -511,22 +548,25 @@ class WindowManager {
     if (this.mainWindow && !this.mainWindow.isDestroyed() && this.mainWindow.isVisible()) {
       this.hideMainWindow();
     } else {
-      this.showMainWindow(); // This will now recreate window on current desktop
+      this.showMainWindow();
     }
   }
 
   // Enhanced apply window position method
-  applyWindowPosition(position) {
+  async applyWindowPosition(position) {
     console.log('📍 Applying window position:', position);
     
     if (!this.mainWindow) return;
     
     try {
+      // First, restore dock if we previously hid it
+      await this.restoreDockIfHiddenByUs();
+      
       // Get current cursor position and display
       const cursorPosition = screen.getCursorScreenPoint();
       const targetDisplay = this.getDisplayAtCursor(cursorPosition);
       
-      const newBounds = this.calculateCursorAwareBounds(position, targetDisplay, cursorPosition);
+      const newBounds = await this.calculateDockAwareBounds(position, targetDisplay, cursorPosition);
       
       if (!newBounds) {
         console.error('❌ Failed to calculate bounds, using fallback');
@@ -547,15 +587,12 @@ class WindowManager {
         this.mainWindow.setMinimizable(false);
         this.mainWindow.setMaximizable(false);
         
-        this.applyDisplaySpecificPositioning(position, targetDisplay);
+        await this.applyDisplaySpecificPositioning(position, targetDisplay);
       } else {
         // For window and cursor modes, allow normal window behavior
         this.mainWindow.setResizable(true);
         this.mainWindow.setMovable(true);
         this.mainWindow.setAlwaysOnTop(true, 'screen-saver');
-        
-        // Restore dock if it was hidden
-        this.dockService.setDockVisibility(true);
       }
     } catch (error) {
       console.error('❌ Error applying window position:', error);
@@ -565,28 +602,6 @@ class WindowManager {
     }
   }
 
-  // Get information about all displays (useful for debugging)
-  getDisplayInfo() {
-    const displays = screen.getAllDisplays();
-    const primary = screen.getPrimaryDisplay();
-    const cursor = screen.getCursorScreenPoint();
-    
-    return {
-      cursor,
-      primary: primary.id,
-      current: this.currentDisplay?.id,
-      displays: displays.map(display => ({
-        id: display.id,
-        isPrimary: display.id === primary.id,
-        isCurrent: display.id === this.currentDisplay?.id,
-        bounds: display.bounds,
-        workArea: display.workArea,
-        scaleFactor: display.scaleFactor
-      }))
-    };
-  }
-
-  // ... (rest of the existing methods remain the same)
   createSettingsWindow() {
     console.log('⚙️ createSettingsWindow called');
     
@@ -647,33 +662,38 @@ class WindowManager {
       const currentPosition = this.settingsService.getWindowPosition();
       console.log('🔧 Ready-to-show: Applying position logic for:', currentPosition);
       
-      // Set up space management for macOS
+      // Set up space management for macOS (with compatibility check)
       if (process.platform === 'darwin') {
         try {
           this.mainWindow.setVisibleOnAllWorkspaces(false);
           
-          // Set collection behavior for proper space handling
-          this.mainWindow.setCollectionBehavior([
-            'moveToActiveSpace',
-            'managed',
-            'participatesInCycle'
-          ]);
+          // Check if setCollectionBehavior exists (newer Electron versions)
+          if (typeof this.mainWindow.setCollectionBehavior === 'function') {
+            this.mainWindow.setCollectionBehavior([
+              'moveToActiveSpace',
+              'managed',
+              'participatesInCycle'
+            ]);
+            console.log('✅ Modern space management configured');
+          } else {
+            console.log('ℹ️ Using legacy space management (setCollectionBehavior not available)');
+          }
           
-          console.log('✅ Space management configured');
         } catch (error) {
-          console.error('❌ Error configuring space management:', error);
+          console.log('ℹ️ Space management not fully supported in this Electron version');
         }
       }
       
-      if (currentPosition === 'bottom' && this.nativeWindowManager) {
-        console.log('🔧 Ready-to-show: Using native APIs for bottom position');
-        // Apply native positioning immediately
-        setTimeout(() => {
-          this.applyWindowPosition(currentPosition);
-        }, 100);
-      } else {
-        console.log('🔧 Ready-to-show: Using standard window level');
+      // Apply positioning with reduced delay for faster startup
+      if (currentPosition === 'cursor' || currentPosition === 'window') {
+        console.log('🔧 Ready-to-show: Floating position, using standard window level');
         this.mainWindow.setAlwaysOnTop(true, 'screen-saver');
+      } else {
+        console.log('🔧 Ready-to-show: Edge position will cover dock');
+        // Reduced delay for faster startup
+        setTimeout(async () => {
+          await this.applyWindowPosition(currentPosition);
+        }, 50);
       }
       
       // Force hide traffic light buttons
@@ -696,20 +716,22 @@ class WindowManager {
     this.mainWindow.on('show', () => {
       console.log('👁️ Main window shown');
       
-      // Ensure proper space behavior when shown
+      // Ensure proper space behavior when shown (with compatibility check)
       if (process.platform === 'darwin') {
         this.mainWindow.setVisibleOnAllWorkspaces(false);
         this.mainWindow.moveTop();
         
-        // Reapply collection behavior to ensure it sticks
-        try {
-          this.mainWindow.setCollectionBehavior([
-            'moveToActiveSpace',
-            'managed', 
-            'participatesInCycle'
-          ]);
-        } catch (error) {
-          console.error('❌ Error reapplying collection behavior:', error);
+        // Only try setCollectionBehavior if it exists
+        if (typeof this.mainWindow.setCollectionBehavior === 'function') {
+          try {
+            this.mainWindow.setCollectionBehavior([
+              'moveToActiveSpace',
+              'managed', 
+              'participatesInCycle'
+            ]);
+          } catch (error) {
+            console.log('ℹ️ Could not set collection behavior:', error.message);
+          }
         }
       }
       
@@ -723,16 +745,16 @@ class WindowManager {
       this.ensureCorrectWindowLevel();
     });
 
-    // Modified blur handler to prevent immediate hiding during repositioning
+    // Modified blur handler with reduced delay for faster response
     this.mainWindow.on('blur', () => {
-      // Add a small delay to prevent hiding during window repositioning
-      setTimeout(() => {
+      // Reduced delay for faster hiding
+      setTimeout(async () => {
         // Only hide if the window is still unfocused after the delay
         if (this.mainWindow && !this.mainWindow.isDestroyed() && !this.mainWindow.isFocused()) {
           console.log('😴 Main window lost focus, hiding...');
-          this.mainWindow.hide();
+          await this.hideMainWindow();
         }
-      }, 100);
+      }, 50); // Reduced from 100ms to 50ms
     });
 
     // Add error handling for main window
@@ -775,26 +797,67 @@ class WindowManager {
     });
   }
 
-  ensureCorrectWindowLevel() {
+  async ensureCorrectWindowLevel() {
     const currentPosition = this.settingsService.getWindowPosition();
-    if (currentPosition === 'bottom') {
-      console.log('🔧 Reapplying bottom position window level');
+    
+    // For now, ALL edge positions use high window level to cover dock
+    // TODO: Later this will be controlled by a user toggle setting
+    
+    if (currentPosition === 'cursor' || currentPosition === 'window') {
+      // Floating positions use normal level
+      this.mainWindow.setAlwaysOnTop(true, 'screen-saver');
+    } else {
+      // Edge positions (left, right, top, bottom) use high level to cover dock
+      console.log('🔧 Edge position: using high window level to cover dock');
       this.mainWindow.setAlwaysOnTop(true, 'pop-up-menu');
       
-      // Reapply bounds for bottom position on current display
+      // Ensure window bounds cover the full edge
       if (this.currentDisplay) {
         const { x: screenX, y: screenY, width: screenWidth, height: screenHeight } = this.currentDisplay.bounds;
-        const bottomBarHeight = 300;
+        const currentBounds = this.mainWindow.getBounds();
         
-        this.mainWindow.setBounds({
-          x: screenX,
-          y: screenY + screenHeight - bottomBarHeight,
-          width: screenWidth,
-          height: bottomBarHeight
-        });
+        // Make sure the window extends to screen edges based on position
+        let newBounds = currentBounds;
+        
+        switch (currentPosition) {
+          case 'left':
+            newBounds = {
+              x: screenX,
+              y: screenY,
+              width: currentBounds.width,
+              height: screenHeight
+            };
+            break;
+          case 'right':
+            newBounds = {
+              x: screenX + screenWidth - currentBounds.width,
+              y: screenY,
+              width: currentBounds.width,
+              height: screenHeight
+            };
+            break;
+          case 'top':
+            newBounds = {
+              x: screenX,
+              y: screenY,
+              width: screenWidth,
+              height: currentBounds.height
+            };
+            break;
+          case 'bottom':
+            newBounds = {
+              x: screenX,
+              y: screenY + screenHeight - currentBounds.height,
+              width: screenWidth,
+              height: currentBounds.height
+            };
+            break;
+        }
+        
+        if (newBounds !== currentBounds) {
+          this.mainWindow.setBounds(newBounds);
+        }
       }
-    } else {
-      this.mainWindow.setAlwaysOnTop(true, 'screen-saver');
     }
   }
 
@@ -818,8 +881,10 @@ class WindowManager {
   }
 
   // Utility methods
-  hideMainWindow() {
+  async hideMainWindow() {
     if (this.mainWindow) {
+      // Restore dock if we hid it
+      await this.restoreDockIfHiddenByUs();
       this.mainWindow.hide();
     }
   }
@@ -846,6 +911,41 @@ class WindowManager {
   sendToAllWindows(event, data) {
     this.sendToMainWindow(event, data);
     this.sendToSettingsWindow(event, data);
+  }
+
+  // Get information about all displays (useful for debugging)
+  getDisplayInfo() {
+    const displays = screen.getAllDisplays();
+    const primary = screen.getPrimaryDisplay();
+    const cursor = screen.getCursorScreenPoint();
+    
+    return {
+      cursor,
+      primary: primary.id,
+      current: this.currentDisplay?.id,
+      displays: displays.map(display => ({
+        id: display.id,
+        isPrimary: display.id === primary.id,
+        isCurrent: display.id === this.currentDisplay?.id,
+        bounds: display.bounds,
+        workArea: display.workArea,
+        scaleFactor: display.scaleFactor
+      }))
+    };
+  }
+
+  // Cleanup method
+  async cleanup() {
+    console.log('💀 Window manager cleanup...');
+    
+    try {
+      // Always restore original dock state during cleanup
+      await this.restoreOriginalDockState();
+      
+      console.log('✅ Window manager cleanup completed');
+    } catch (error) {
+      console.error('❌ Error during window manager cleanup:', error);
+    }
   }
 }
 
