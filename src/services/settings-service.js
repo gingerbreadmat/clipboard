@@ -10,6 +10,7 @@ class SettingsService {
       defaults: {
         theme: 'light',
         windowPosition: 'cursor', // Default to cursor-aware positioning
+        horizontalScrollEnabled: true, // New horizontal scroll setting
         // New cursor-specific settings
         cursorOffset: { x: 20, y: 20 }, // Default offset from cursor
         edgeSnapping: true, // Whether to snap to nearest edge in cursor-edge mode
@@ -50,6 +51,19 @@ class SettingsService {
   setWindowPosition(position) {
     console.log('📍 Setting window position to:', position);
     this.store.set('windowPosition', position);
+    return true;
+  }
+
+  // Horizontal scroll setting methods
+  getHorizontalScrollEnabled() {
+    const enabled = this.store.get('horizontalScrollEnabled', true);
+    console.log('🖱️ Getting horizontal scroll enabled from store:', enabled);
+    return enabled;
+  }
+
+  setHorizontalScrollEnabled(enabled) {
+    console.log('🖱️ Setting horizontal scroll enabled to:', enabled);
+    this.store.set('horizontalScrollEnabled', enabled);
     return true;
   }
 
@@ -172,6 +186,10 @@ class SettingsService {
     );
   }
 
+  isValidHorizontalScrollSetting(enabled) {
+    return typeof enabled === 'boolean';
+  }
+
   // Safe setters with validation
   setThemeSafe(theme) {
     if (this.isValidTheme(theme)) {
@@ -196,6 +214,15 @@ class SettingsService {
       return this.setCursorOffset(offset);
     } else {
       console.error('❌ Invalid cursor offset:', offset);
+      return false;
+    }
+  }
+
+  setHorizontalScrollEnabledSafe(enabled) {
+    if (this.isValidHorizontalScrollSetting(enabled)) {
+      return this.setHorizontalScrollEnabled(enabled);
+    } else {
+      console.error('❌ Invalid horizontal scroll setting:', enabled);
       return false;
     }
   }
@@ -251,7 +278,8 @@ class SettingsService {
       multiMonitorSupport: this.getMultiMonitorSupport(),
       rememberLastDisplay: this.getRememberLastDisplay(),
       lastDisplayId: this.getLastDisplayId(),
-      legacyPositioning: this.getLegacyPositioning()
+      legacyPositioning: this.getLegacyPositioning(),
+      horizontalScrollEnabled: this.getHorizontalScrollEnabled()
     };
   }
 
@@ -288,6 +316,10 @@ class SettingsService {
     if (config.legacyPositioning !== undefined) {
       results.legacyPositioning = this.setLegacyPositioning(config.legacyPositioning);
     }
+
+    if (config.horizontalScrollEnabled !== undefined) {
+      results.horizontalScrollEnabled = this.setHorizontalScrollEnabledSafe(config.horizontalScrollEnabled);
+    }
     
     console.log('✅ Positioning configuration results:', results);
     return results;
@@ -317,6 +349,11 @@ class SettingsService {
         console.error('❌ Invalid cursor offset in import:', settings.cursorOffset);
         return false;
       }
+
+      if (settings.horizontalScrollEnabled && !this.isValidHorizontalScrollSetting(settings.horizontalScrollEnabled)) {
+        console.error('❌ Invalid horizontal scroll setting in import:', settings.horizontalScrollEnabled);
+        return false;
+      }
       
       // Import valid settings
       Object.keys(settings).forEach(key => {
@@ -343,6 +380,7 @@ class SettingsService {
       settings: this.getAll(),
       theme: this.getTheme(),
       windowPosition: this.getWindowPosition(),
+      horizontalScrollEnabled: this.getHorizontalScrollEnabled(),
       positioningConfig: this.getPositioningConfig(),
       version: this.get('version'),
       migrated: !this.getLegacyPositioning()
@@ -357,6 +395,7 @@ class SettingsService {
     const recommendations = {
       theme: 'light', // Could detect system theme
       windowPosition: 'cursor',
+      horizontalScrollEnabled: true,
       cursorOffset: { x: 20, y: 20 },
       edgeSnapping: true,
       multiMonitorSupport: true,
@@ -368,14 +407,17 @@ class SettingsService {
       case 'darwin': // macOS
         recommendations.windowPosition = 'cursor';
         recommendations.edgeSnapping = true;
+        recommendations.horizontalScrollEnabled = true;
         break;
       case 'win32': // Windows
         recommendations.windowPosition = 'cursor-edge';
         recommendations.edgeSnapping = false;
+        recommendations.horizontalScrollEnabled = true;
         break;
       case 'linux': // Linux
         recommendations.windowPosition = 'window';
         recommendations.edgeSnapping = false;
+        recommendations.horizontalScrollEnabled = false;
         break;
     }
     
@@ -398,6 +440,9 @@ class SettingsService {
           break;
         case 'cursorOffset':
           this.setCursorOffsetSafe(recommended.cursorOffset);
+          break;
+        case 'horizontalScrollEnabled':
+          this.setHorizontalScrollEnabledSafe(recommended.horizontalScrollEnabled);
           break;
         default:
           this.set(key, recommended[key]);

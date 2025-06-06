@@ -263,6 +263,48 @@ class IPCManager {
       console.log('📁 Opening folder:', userDataPath);
       shell.openPath(userDataPath);
     });
+     ipcMain.handle('get-horizontal-scroll-enabled', async () => {
+      console.log('🖱️ IPC: get-horizontal-scroll-enabled called');
+      try {
+        const enabled = this.settingsService.getHorizontalScrollEnabled();
+        console.log('🖱️ Current horizontal scroll enabled from store:', enabled);
+        return enabled;
+      } catch (error) {
+        console.error('❌ Error getting horizontal scroll enabled:', error);
+        return true; // Default to enabled
+      }
+    });
+
+    // Set horizontal scroll enabled setting
+    ipcMain.handle('set-horizontal-scroll-enabled', async (event, enabled) => {
+      console.log('🖱️ IPC: set-horizontal-scroll-enabled called with:', enabled);
+      try {
+        console.log('💾 Storing horizontal scroll setting in settings service...');
+        this.settingsService.setHorizontalScrollEnabled(enabled);
+        console.log('✅ Horizontal scroll setting stored successfully');
+        
+        console.log('🖱️ Horizontal scroll enabled set to:', enabled);
+        return true;
+      } catch (error) {
+        console.error('❌ Failed to set horizontal scroll enabled:', error);
+        return false;
+      }
+    });
+
+    // Notify main window of horizontal scroll change
+    ipcMain.handle('notify-horizontal-scroll-changed', async (event, enabled) => {
+      console.log('📡 IPC: notify-horizontal-scroll-changed called with:', enabled);
+      try {
+        // Send to main window
+        this.windowManager.sendToMainWindow('horizontal-scroll-changed', enabled);
+        console.log('✅ Horizontal scroll change notification sent');
+        return true;
+      } catch (error) {
+        console.error('❌ Failed to notify horizontal scroll change:', error);
+        return false;
+      }
+    });
+
   }
 
   setupThemeHandlers() {

@@ -62,6 +62,22 @@
                 </div>
             </div>
         </div>
+        <div class="settings-section">
+            <h2 class="section-title">Mouse & Scrolling</h2>
+            
+            <div class="setting-item">
+                <div class="setting-label">
+                    <h3>Horizontal Scroll Direction</h3>
+                    <p>Enable mouse wheel to scroll horizontally when clipboard is positioned at top or bottom edges</p>
+                </div>
+                <div class="setting-control">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="horizontal-scroll-toggle" checked>
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+            </div>
+        </div>
 
         <div class="settings-section">
             <h2 class="section-title">Multi-Monitor Setup</h2>
@@ -341,6 +357,42 @@
                     }
                 }
             });
+
+              // Load current horizontal scroll setting
+                try {
+                    const horizontalScrollEnabled = await ipcRenderer.invoke('get-horizontal-scroll-enabled');
+                    console.log('🖱️ Current horizontal scroll setting loaded:', horizontalScrollEnabled);
+                    document.getElementById('horizontal-scroll-toggle').checked = horizontalScrollEnabled;
+                } catch (error) {
+                    console.error('❌ Failed to load horizontal scroll setting:', error);
+                }
+
+                // Horizontal scroll toggle handler
+                const horizontalScrollToggle = document.getElementById('horizontal-scroll-toggle');
+                if (horizontalScrollToggle) {
+                    console.log('✅ Horizontal scroll toggle found');
+                    
+                    horizontalScrollToggle.addEventListener('change', async function(e) {
+                        const enabled = e.target.checked;
+                        console.log('🖱️ Horizontal scroll setting changed to:', enabled);
+                        
+                        try {
+                            const result = await ipcRenderer.invoke('set-horizontal-scroll-enabled', enabled);
+                            console.log('✅ Horizontal scroll setting saved:', result);
+                            
+                            // Notify main window of the change
+                            await ipcRenderer.invoke('notify-horizontal-scroll-changed', enabled);
+                        } catch (error) {
+                            console.error('❌ Failed to save horizontal scroll setting:', error);
+                            // Revert the toggle on error
+                            e.target.checked = !enabled;
+                        }
+                    });
+                    
+                    console.log('✅ Horizontal scroll toggle event listener attached');
+                } else {
+                    console.error('❌ Horizontal scroll toggle not found');
+                }
         });
 
         function applyTheme(theme) {

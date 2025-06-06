@@ -5,11 +5,13 @@ class ClipboardManagerUI {
         this.clipboardItems = [];
         this.currentSearchQuery = '';
         this.selectedItemId = null;
-        this.isInitialLoad = true; // Track if this is the first load
+        this.isInitialLoad = true;
+        this.horizontalScrollEnabled = true; // Default to enabled
         
         this.initializeElements();
         this.bindEvents();
         this.loadTheme();
+        this.loadHorizontalScrollSetting();
         
         // Add layout detection
         this.detectAndApplyLayout();
@@ -19,9 +21,79 @@ class ClipboardManagerUI {
             this.detectAndApplyLayout();
         });
         
+        // Add horizontal scroll handler
+        this.setupHorizontalScrolling();
+        
         // Load clipboard history immediately when UI starts
         console.log('UI: Constructor - loading clipboard history immediately');
         this.loadClipboardHistory();
+    }
+
+    async loadHorizontalScrollSetting() {
+        try {
+            this.horizontalScrollEnabled = await ipcRenderer.invoke('get-horizontal-scroll-enabled');
+            console.log('🖱️ Horizontal scroll setting loaded:', this.horizontalScrollEnabled);
+        } catch (error) {
+            console.error('Failed to load horizontal scroll setting:', error);
+            this.horizontalScrollEnabled = true; // Default to enabled
+        }
+    }
+
+    setupHorizontalScrolling() {
+        // Add wheel event listener to the clipboard list
+        this.clipboardList.addEventListener('wheel', (e) => {
+            // Only apply horizontal scrolling in landscape mode AND if setting is enabled
+            if (this.clipboardList.classList.contains('landscape') && this.horizontalScrollEnabled) {
+                e.preventDefault();
+                
+                // Convert vertical scroll to horizontal scroll
+                // deltaY is positive when scrolling down, negative when scrolling up
+                const scrollAmount = e.deltaY;
+                
+                // Apply horizontal scroll
+                this.clipboardList.scrollLeft += scrollAmount;
+                
+                console.log('Horizontal scroll applied:', scrollAmount);
+            }
+        }, { passive: false }); // passive: false allows preventDefault()
+    }
+
+    detectAndApplyLayout() {
+        // Get window dimensions
+        const windowWidth = window.innerWidth;
+        const windowHeight = window.innerHeight;
+        
+        // Determine orientation mode like Paste
+        let mode = 'portrait'; // Default sidebar mode
+        
+        // Very wide = landscape (bottom bar)
+        if (windowWidth > windowHeight * 1.8) {
+            mode = 'landscape';
+        }
+        // More square/balanced = window mode
+        else if (Math.abs(windowWidth - windowHeight) < windowWidth * 0.3) {
+            mode = 'window';
+        }
+        // Otherwise portrait (sidebar)
+        
+        console.log(`Window: ${windowWidth}x${windowHeight}, Mode: ${mode}`);
+        
+        // Apply appropriate classes to clipboard list
+        if (this.clipboardList) {
+            // Remove all mode classes
+            this.clipboardList.classList.remove('landscape', 'window-mode');
+            
+            // Apply the correct mode class
+            if (mode === 'landscape') {
+                this.clipboardList.classList.add('landscape');
+                console.log('Applied landscape layout (bottom bar style) - horizontal scrolling enabled');
+            } else if (mode === 'window') {
+                this.clipboardList.classList.add('window-mode');
+                console.log('Applied window layout (free window style)');
+            } else {
+                console.log('Applied portrait layout (sidebar style)');
+            }
+        }
     }
 
     initializeElements() {
