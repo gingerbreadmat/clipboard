@@ -1,4 +1,3 @@
-// Enhanced src/managers/window-manager.js with cursor-aware positioning
 
 const { BrowserWindow, screen } = require('electron');
 const path = require('path');
@@ -586,7 +585,7 @@ class WindowManager {
     };
   }
 
-  // ... (rest of the existing methods remain the same)
+
   createSettingsWindow() {
     console.log('⚙️ createSettingsWindow called');
     
@@ -733,6 +732,7 @@ class WindowManager {
           this.mainWindow.hide();
         }
       }, 100);
+    // Hide when losing focus (clicking outside)
     });
 
     // Add error handling for main window
@@ -817,7 +817,6 @@ class WindowManager {
     return this.settingsWindow;
   }
 
-  // Utility methods
   hideMainWindow() {
     if (this.mainWindow) {
       this.mainWindow.hide();

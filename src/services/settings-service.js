@@ -1,4 +1,3 @@
-// Enhanced src/services/settings-service.js
 
 const Store = require('electron-store');
 
@@ -293,6 +292,7 @@ class SettingsService {
     return results;
   }
 
+
   // Export/Import settings
   exportSettings() {
     return JSON.stringify(this.getAll(), null, 2);
@@ -313,6 +313,7 @@ class SettingsService {
         return false;
       }
       
+
       if (settings.cursorOffset && !this.isValidCursorOffset(settings.cursorOffset)) {
         console.error('❌ Invalid cursor offset in import:', settings.cursorOffset);
         return false;

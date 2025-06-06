@@ -14,7 +14,6 @@ class IPCManager {
     this.setupSettingsHandlers();
     this.setupThemeHandlers();
     this.setupPositionHandlers();
-    this.setupDisplayHandlers(); // New display-related handlers
     this.setupUtilityHandlers();
     
     console.log('✅ IPC Manager initialized with all handlers');
@@ -200,7 +199,6 @@ class IPCManager {
       console.log('⚙️ IPC: close-settings called');
       this.windowManager.closeSettingsWindow();
     });
-
     // Test cursor position (for settings testing)
     ipcMain.handle('test-cursor-position', async () => {
       console.log('🎯 IPC: test-cursor-position called');
