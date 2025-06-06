@@ -524,3 +524,554 @@
     display: inline-block;
     text-align: left;
 }
+
+/* ========================================
+   ENHANCED ITEM HEADER
+   ======================================== */
+
+.item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  flex-shrink: 0;
+  height: 32px; /* Slightly taller for badges */
+}
+
+.item-type-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: white;
+  flex-shrink: 0;
+  
+  /* Default badge color */
+  background: var(--shadow-medium);
+}
+
+/* Type-specific badge colors */
+.item-type-badge.image { background: linear-gradient(135deg, #FF6B6B, #FF8E8E); }
+.item-type-badge.document { background: linear-gradient(135deg, #3498DB, #5DADE2); }
+.item-type-badge.video { background: linear-gradient(135deg, #9B59B6, #BB8FCE); }
+.item-type-badge.audio { background: linear-gradient(135deg, #1ABC9C, #48C9B0); }
+.item-type-badge.archive { background: linear-gradient(135deg, #F39C12, #F8C471); }
+.item-type-badge.application { background: linear-gradient(135deg, #28A745, #58D68D); }
+.item-type-badge.code { background: linear-gradient(135deg, #6C757D, #ADB5BD); }
+.item-type-badge.text { background: linear-gradient(135deg, #495057, #6C757D); }
+.item-type-badge.files { background: linear-gradient(135deg, #E67E22, #F8C471); }
+
+.type-icon {
+  font-size: 12px;
+  line-height: 1;
+}
+
+.type-text {
+  line-height: 1;
+}
+
+.item-time {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+/* ========================================
+   FILE PREVIEW LAYOUT
+   ======================================== */
+
+.file-preview {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  width: 100%;
+}
+
+.file-thumbnail {
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.system-thumbnail {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 6px;
+}
+
+.fallback-icon-text {
+  font-size: 24px;
+  line-height: 1;
+}
+
+.file-details {
+  flex: 1;
+  min-width: 0; /* Allows text to truncate */
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.file-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.2;
+}
+
+.file-meta {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.file-extension {
+  background: var(--shadow-light);
+  color: var(--text-secondary);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.file-size {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  font-weight: 500;
+}
+
+.file-dimensions {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  font-weight: 500;
+}
+
+/* ========================================
+   SOURCE APPLICATION INFO
+   ======================================== */
+
+.source-app {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.source-label {
+  font-size: 9px;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+}
+
+.source-name {
+  font-size: 10px;
+  color: var(--text-secondary);
+  font-weight: 500;
+  background: var(--shadow-light);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+/* ========================================
+   MEDIA-SPECIFIC STYLES
+   ======================================== */
+
+.media-info {
+  margin-top: 8px;
+  padding: 4px 8px;
+  background: var(--bg-quaternary);
+  border-radius: 6px;
+  border: 1px solid var(--border-light);
+}
+
+.duration {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-weight: 600;
+  font-family: 'SF Mono', Monaco, monospace;
+}
+
+.preview-indicator {
+  margin-top: 6px;
+  text-align: center;
+}
+
+.preview-text {
+  font-size: 9px;
+  color: var(--primary-color);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+}
+
+/* ========================================
+   IMAGE-SPECIFIC ENHANCEMENTS
+   ======================================== */
+
+.image-preview {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 6px;
+}
+
+.image-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.7));
+  color: white;
+  padding: 8px;
+  transform: translateY(100%);
+  transition: transform 0.2s ease;
+}
+
+.clipboard-item:hover .image-overlay {
+  transform: translateY(0);
+}
+
+.image-dimensions {
+  font-size: 10px;
+  font-weight: 600;
+  font-family: 'SF Mono', Monaco, monospace;
+}
+
+.image-overlay .source-app {
+  margin-top: 2px;
+}
+
+.image-overlay .source-name {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+}
+
+/* ========================================
+   TEXT-SPECIFIC STYLES
+   ======================================== */
+
+.text-preview {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-primary);
+  word-wrap: break-word;
+  white-space: pre-wrap;
+  overflow: hidden;
+  flex: 1;
+}
+
+/* ========================================
+   ENHANCED FOOTER
+   ======================================== */
+
+.item-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: auto;
+  padding-top: 8px;
+  border-top: 1px solid var(--shadow-light);
+  flex-shrink: 0;
+  min-height: 20px;
+}
+
+.word-count {
+  font-size: 9px;
+  color: var(--text-tertiary);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.page-count {
+  font-size: 9px;
+  color: var(--text-tertiary);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.camera-info {
+  font-size: 9px;
+  color: var(--text-tertiary);
+  font-weight: 500;
+}
+
+/* ========================================
+   TYPE-SPECIFIC CARD VARIATIONS
+   ======================================== */
+
+/* Files cards get a subtle left border based on file type */
+.clipboard-item.files-item {
+  border-left: 3px solid transparent;
+}
+
+.clipboard-item.files-item.image { border-left-color: #FF6B6B; }
+.clipboard-item.files-item.document { border-left-color: #3498DB; }
+.clipboard-item.files-item.video { border-left-color: #9B59B6; }
+.clipboard-item.files-item.audio { border-left-color: #1ABC9C; }
+.clipboard-item.files-item.archive { border-left-color: #F39C12; }
+.clipboard-item.files-item.application { border-left-color: #28A745; }
+.clipboard-item.files-item.code { border-left-color: #6C757D; }
+
+/* ========================================
+   HOVER EFFECTS
+   ======================================== */
+
+.clipboard-item:hover .file-thumbnail {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px var(--shadow-medium);
+}
+
+.clipboard-item:hover .source-name {
+  background: var(--primary-color);
+  color: white;
+}
+
+.clipboard-item:hover .file-extension {
+  background: var(--primary-color);
+  color: white;
+}
+
+/* ========================================
+   LOADING STATES
+   ======================================== */
+
+.file-thumbnail.loading {
+  background: linear-gradient(90deg, var(--bg-tertiary) 25%, var(--bg-secondary) 50%, var(--bg-tertiary) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* ========================================
+   RESPONSIVE ADJUSTMENTS
+   ======================================== */
+
+/* In landscape mode, adjust file preview layout */
+.landscape .file-preview {
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.landscape .file-thumbnail {
+  width: 64px;
+  height: 64px;
+}
+
+.landscape .file-details {
+  align-items: center;
+}
+
+.landscape .file-meta {
+  justify-content: center;
+}
+
+/* ========================================
+   DARK THEME ADJUSTMENTS
+   ======================================== */
+
+[data-theme="dark"] .item-type-badge {
+  /* Badge colors are already good for dark theme */
+}
+
+[data-theme="dark"] .file-thumbnail {
+  border-color: var(--border-medium);
+}
+
+[data-theme="dark"] .file-extension {
+  background: var(--bg-quaternary);
+}
+
+[data-theme="dark"] .source-name {
+  background: var(--bg-quaternary);
+}
+
+[data-theme="dark"] .media-info {
+  background: var(--bg-secondary);
+  border-color: var(--border-medium);
+}
+
+[data-theme="dark"] .item-footer {
+  border-top-color: var(--border-medium);
+}
+
+/* ========================================
+   ACCESSIBILITY
+   ======================================== */
+
+.clipboard-item:focus {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+
+.file-name {
+  /* Ensure file names are readable */
+  line-height: 1.3;
+}
+
+/* High contrast mode adjustments */
+@media (prefers-contrast: high) {
+  .item-type-badge {
+    border: 1px solid currentColor;
+  }
+  
+  .file-thumbnail {
+    border: 2px solid var(--text-primary);
+  }
+}
+
+/* Add this to your renderer/card-styles.css file */
+
+/* ========================================
+   FILE PREVIEW STYLES
+   ======================================== */
+
+.file-preview {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px;
+    background: var(--bg-tertiary);
+    border-radius: 8px;
+    border: 1px solid var(--border-light);
+    min-height: 60px;
+}
+
+.file-icon {
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    font-size: 24px;
+    line-height: 1;
+}
+
+.file-details {
+    flex: 1;
+    min-width: 0;
+}
+
+.file-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 2px;
+}
+
+.file-type {
+    font-size: 11px;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 500;
+    margin-bottom: 2px;
+}
+
+.thumbnail-hint {
+    font-size: 9px;
+    color: var(--primary-color);
+    background: rgba(0, 122, 255, 0.1);
+    padding: 2px 6px;
+    border-radius: 4px;
+    display: inline-block;
+    font-weight: 500;
+}
+
+/* File type specific styling */
+.file-preview[data-file-type="pdf"] {
+    border-left: 4px solid #E74C3C;
+    background: linear-gradient(135deg, rgba(231, 76, 60, 0.05), transparent);
+}
+
+.file-preview[data-file-type="jpg"],
+.file-preview[data-file-type="jpeg"],
+.file-preview[data-file-type="png"],
+.file-preview[data-file-type="gif"] {
+    border-left: 4px solid #FF6B6B;
+    background: linear-gradient(135deg, rgba(255, 107, 107, 0.05), transparent);
+}
+
+.file-preview[data-file-type="mp4"],
+.file-preview[data-file-type="mov"],
+.file-preview[data-file-type="avi"] {
+    border-left: 4px solid #9B59B6;
+    background: linear-gradient(135deg, rgba(155, 89, 182, 0.05), transparent);
+}
+
+.file-preview[data-file-type="app"] {
+    border-left: 4px solid #28A745;
+    background: linear-gradient(135deg, rgba(40, 167, 69, 0.05), transparent);
+}
+
+.file-preview[data-file-type="zip"],
+.file-preview[data-file-type="rar"],
+.file-preview[data-file-type="dmg"] {
+    border-left: 4px solid #F39C12;
+    background: linear-gradient(135deg, rgba(243, 156, 18, 0.05), transparent);
+}
+
+/* Hover effects */
+.clipboard-item:hover .file-preview {
+    background: var(--bg-secondary);
+    border-color: var(--primary-color);
+    box-shadow: 0 2px 8px rgba(0, 122, 255, 0.1);
+}
+
+.clipboard-item:hover .file-icon {
+    transform: scale(1.1);
+    background: rgba(0, 122, 255, 0.1);
+}
+
+.clipboard-item:hover .thumbnail-hint {
+    background: var(--primary-color);
+    color: white;
+}
+
+/* Dark theme adjustments */
+[data-theme="dark"] .file-preview {
+    background: var(--bg-secondary);
+    border-color: var(--border-medium);
+}
+
+[data-theme="dark"] .file-icon {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+[data-theme="dark"] .clipboard-item:hover .file-icon {
+    background: rgba(0, 122, 255, 0.2);
+}

@@ -1,4 +1,122 @@
+// renderer/app.js
 const { ipcRenderer } = require('electron');
+
+// File type detection class
+class SimpleFileDetector {
+  constructor() {
+    // File type mappings - focused on visual recognition
+    this.fileTypes = {
+      // Images - these should get system thumbnails
+      'jpg': { icon: '📸', color: '#FF6B6B', name: 'Photo', canThumbnail: true },
+      'jpeg': { icon: '📸', color: '#FF6B6B', name: 'Photo', canThumbnail: true },
+      'png': { icon: '🖼️', color: '#4ECDC4', name: 'Image', canThumbnail: true },
+      'gif': { icon: '🎞️', color: '#9B59B6', name: 'GIF', canThumbnail: true },
+      'svg': { icon: '🎨', color: '#3498DB', name: 'Vector', canThumbnail: false },
+      'webp': { icon: '🌐', color: '#2ECC71', name: 'WebP', canThumbnail: true },
+      'tiff': { icon: '📷', color: '#E74C3C', name: 'TIFF', canThumbnail: true },
+      'bmp': { icon: '🖼️', color: '#95A5A6', name: 'Bitmap', canThumbnail: true },
+      
+      // Documents - PDFs get thumbnails, others get icons
+      'pdf': { icon: '📕', color: '#E74C3C', name: 'PDF', canThumbnail: true },
+      'doc': { icon: '📄', color: '#2980B9', name: 'Word', canThumbnail: false },
+      'docx': { icon: '📄', color: '#2980B9', name: 'Word', canThumbnail: false },
+      'xls': { icon: '📊', color: '#27AE60', name: 'Excel', canThumbnail: false },
+      'xlsx': { icon: '📊', color: '#27AE60', name: 'Excel', canThumbnail: false },
+      'ppt': { icon: '📽️', color: '#E67E22', name: 'PowerPoint', canThumbnail: false },
+      'pptx': { icon: '📽️', color: '#E67E22', name: 'PowerPoint', canThumbnail: false },
+      'pages': { icon: '📄', color: '#FF9500', name: 'Pages', canThumbnail: false },
+      'numbers': { icon: '📊', color: '#FF9500', name: 'Numbers', canThumbnail: false },
+      'keynote': { icon: '📽️', color: '#FF9500', name: 'Keynote', canThumbnail: false },
+      'txt': { icon: '📝', color: '#95A5A6', name: 'Text', canThumbnail: false },
+      'rtf': { icon: '📝', color: '#BDC3C7', name: 'Rich Text', canThumbnail: false },
+      
+      // Media - videos get thumbnails
+      'mp4': { icon: '🎬', color: '#8E44AD', name: 'Video', canThumbnail: true },
+      'mov': { icon: '🎥', color: '#9B59B6', name: 'Video', canThumbnail: true },
+      'avi': { icon: '📹', color: '#A569BD', name: 'Video', canThumbnail: true },
+      'mkv': { icon: '🎞️', color: '#BB8FCE', name: 'Video', canThumbnail: true },
+      'webm': { icon: '🌐', color: '#D7BDE2', name: 'Web Video', canThumbnail: true },
+      'mp3': { icon: '🎵', color: '#1ABC9C', name: 'Audio', canThumbnail: false },
+      'wav': { icon: '🎶', color: '#16A085', name: 'Audio', canThumbnail: false },
+      'flac': { icon: '🎼', color: '#48C9B0', name: 'FLAC Audio', canThumbnail: false },
+      'm4a': { icon: '🍎', color: '#85E3D0', name: 'iTunes Audio', canThumbnail: false },
+      'aac': { icon: '🎧', color: '#76D7C4', name: 'AAC Audio', canThumbnail: false },
+      
+      // Archives
+      'zip': { icon: '🗜️', color: '#F39C12', name: 'Archive', canThumbnail: false },
+      'rar': { icon: '📦', color: '#E67E22', name: 'Archive', canThumbnail: false },
+      '7z': { icon: '🗃️', color: '#D68910', name: '7-Zip', canThumbnail: false },
+      'tar': { icon: '📂', color: '#B7950B', name: 'TAR Archive', canThumbnail: false },
+      'gz': { icon: '🗜️', color: '#F4D03F', name: 'GZip', canThumbnail: false },
+      'dmg': { icon: '💿', color: '#5DADE2', name: 'Disk Image', canThumbnail: false },
+      'iso': { icon: '💽', color: '#85C1E9', name: 'ISO Image', canThumbnail: false },
+      
+      // Apps - these get their actual icons as thumbnails
+      'app': { icon: '📱', color: '#28A745', name: 'App', canThumbnail: true },
+      'pkg': { icon: '📦', color: '#17A2B8', name: 'Installer', canThumbnail: false },
+      'deb': { icon: '🐧', color: '#6F42C1', name: 'Debian Package', canThumbnail: false },
+      'exe': { icon: '🪟', color: '#0D6EFD', name: 'Windows App', canThumbnail: false },
+      'msi': { icon: '🛠️', color: '#20C997', name: 'Windows Installer', canThumbnail: false },
+      
+      // Code
+      'js': { icon: '📜', color: '#F7DF1E', name: 'JavaScript', canThumbnail: false },
+      'ts': { icon: '📘', color: '#3178C6', name: 'TypeScript', canThumbnail: false },
+      'py': { icon: '🐍', color: '#3776AB', name: 'Python', canThumbnail: false },
+      'html': { icon: '🌐', color: '#E34F26', name: 'HTML', canThumbnail: false },
+      'css': { icon: '🎨', color: '#1572B6', name: 'CSS', canThumbnail: false },
+      'json': { icon: '📋', color: '#000000', name: 'JSON', canThumbnail: false },
+      'xml': { icon: '📋', color: '#FF6600', name: 'XML', canThumbnail: false },
+      'yaml': { icon: '📋', color: '#CB171E', name: 'YAML', canThumbnail: false },
+      'yml': { icon: '📋', color: '#CB171E', name: 'YAML', canThumbnail: false }
+    };
+  }
+
+  // Detect if text content is a file path
+  detectFileFromText(text) {
+    if (!text || typeof text !== 'string') return null;
+    
+    const cleanText = text.trim();
+    
+    // Look for file extensions in various formats
+    const patterns = [
+      // Standard file paths: /path/to/file.ext
+      /([^\/\\]*\.)([a-zA-Z0-9]+)(?:\s|$|"|')/,
+      // Just filename: filename.ext
+      /^([^\/\\]*\.)([a-zA-Z0-9]+)$/,
+      // With quotes: "filename.ext"
+      /"([^"]*\.)([a-zA-Z0-9]+)"/,
+      // With spaces: file name.ext
+      /([a-zA-Z0-9\s_-]*\.)([a-zA-Z0-9]+)(?:\s|$)/
+    ];
+    
+    for (const pattern of patterns) {
+      const fileMatch = cleanText.match(pattern);
+      if (fileMatch) {
+        const fullFilename = fileMatch[1] + fileMatch[2];
+        const extension = fileMatch[2].toLowerCase();
+        const fileType = this.fileTypes[extension];
+        
+        if (fileType) {
+          return {
+            filename: fullFilename,
+            extension: extension,
+            ...fileType,
+            isFile: true,
+            path: cleanText
+          };
+        }
+      }
+    }
+    
+    return null;
+  }
+
+  // Get file info by extension
+  getFileInfo(extension) {
+    if (!extension) return null;
+    return this.fileTypes[extension.toLowerCase()] || null;
+  }
+}
 
 class ClipboardManagerUI {
     constructor() {
@@ -6,7 +124,10 @@ class ClipboardManagerUI {
         this.currentSearchQuery = '';
         this.selectedItemId = null;
         this.isInitialLoad = true;
-        this.horizontalScrollEnabled = true; // Default to enabled
+        this.horizontalScrollEnabled = true;
+        
+        // Initialize file detector
+        this.fileDetector = new SimpleFileDetector();
         
         this.initializeElements();
         this.bindEvents();
@@ -35,55 +156,38 @@ class ClipboardManagerUI {
             console.log('🖱️ Horizontal scroll setting loaded:', this.horizontalScrollEnabled);
         } catch (error) {
             console.error('Failed to load horizontal scroll setting:', error);
-            this.horizontalScrollEnabled = true; // Default to enabled
+            this.horizontalScrollEnabled = true;
         }
     }
 
     setupHorizontalScrolling() {
-        // Add wheel event listener to the clipboard list
         this.clipboardList.addEventListener('wheel', (e) => {
-            // Only apply horizontal scrolling in landscape mode AND if setting is enabled
             if (this.clipboardList.classList.contains('landscape') && this.horizontalScrollEnabled) {
                 e.preventDefault();
-                
-                // Convert vertical scroll to horizontal scroll
-                // deltaY is positive when scrolling down, negative when scrolling up
                 const scrollAmount = e.deltaY;
-                
-                // Apply horizontal scroll
                 this.clipboardList.scrollLeft += scrollAmount;
-                
                 console.log('Horizontal scroll applied:', scrollAmount);
             }
-        }, { passive: false }); // passive: false allows preventDefault()
+        }, { passive: false });
     }
 
     detectAndApplyLayout() {
-        // Get window dimensions
         const windowWidth = window.innerWidth;
         const windowHeight = window.innerHeight;
         
-        // Determine orientation mode like Paste
-        let mode = 'portrait'; // Default sidebar mode
+        let mode = 'portrait';
         
-        // Very wide = landscape (bottom bar)
         if (windowWidth > windowHeight * 1.8) {
             mode = 'landscape';
-        }
-        // More square/balanced = window mode
-        else if (Math.abs(windowWidth - windowHeight) < windowWidth * 0.3) {
+        } else if (Math.abs(windowWidth - windowHeight) < windowWidth * 0.3) {
             mode = 'window';
         }
-        // Otherwise portrait (sidebar)
         
         console.log(`Window: ${windowWidth}x${windowHeight}, Mode: ${mode}`);
         
-        // Apply appropriate classes to clipboard list
         if (this.clipboardList) {
-            // Remove all mode classes
             this.clipboardList.classList.remove('landscape', 'window-mode');
             
-            // Apply the correct mode class and layout adjustments
             if (mode === 'landscape') {
                 this.clipboardList.classList.add('landscape');
                 this.applyHorizontalLayout();
@@ -100,24 +204,14 @@ class ClipboardManagerUI {
     }
 
     applyHorizontalLayout() {
-        // Move stats to header and restructure for horizontal mode
         this.moveStatsToHeader();
-        
-        // Add horizontal layout class to body/container
         document.body.classList.add('horizontal-mode');
-        
-        // Update the header structure for centered search
         this.updateHeaderForHorizontal();
     }
 
     applyVerticalLayout() {
-        // Restore normal layout
         this.restoreStatsBar();
-        
-        // Remove horizontal layout class
         document.body.classList.remove('horizontal-mode');
-        
-        // Restore normal header structure
         this.updateHeaderForVertical();
     }
 
@@ -127,13 +221,11 @@ class ClipboardManagerUI {
         const headerContent = document.querySelector('.header-content');
         
         if (header && statsBar && headerContent) {
-            // Create stats element in header if it doesn't exist
             let headerStats = header.querySelector('.header-stats');
             if (!headerStats) {
                 headerStats = document.createElement('div');
                 headerStats.className = 'header-stats';
                 
-                // Insert before settings button
                 const settingsBtn = headerContent.querySelector('.settings-btn');
                 if (settingsBtn) {
                     headerContent.insertBefore(headerStats, settingsBtn);
@@ -142,10 +234,7 @@ class ClipboardManagerUI {
                 }
             }
             
-            // Copy stats content to header
             headerStats.textContent = statsBar.textContent;
-            
-            // Hide the original stats bar
             statsBar.style.display = 'none';
         }
     }
@@ -155,12 +244,10 @@ class ClipboardManagerUI {
         const headerStats = document.querySelector('.header-stats');
         
         if (statsBar) {
-            // Show the original stats bar
             statsBar.style.display = 'block';
         }
         
         if (headerStats) {
-            // Remove the header stats element
             headerStats.remove();
         }
     }
@@ -168,7 +255,6 @@ class ClipboardManagerUI {
     updateHeaderForHorizontal() {
         const headerContent = document.querySelector('.header-content');
         if (headerContent) {
-            // Add class for horizontal styling
             headerContent.classList.add('horizontal-header');
         }
     }
@@ -176,7 +262,6 @@ class ClipboardManagerUI {
     updateHeaderForVertical() {
         const headerContent = document.querySelector('.header-content');
         if (headerContent) {
-            // Remove horizontal styling class
             headerContent.classList.remove('horizontal-header');
         }
     }
@@ -256,14 +341,11 @@ class ClipboardManagerUI {
         ipcRenderer.on('window-shown', () => {
             this.isInitialLoad = true;
             
-            // Hide content immediately to prevent any visible layout shifts
             if (this.clipboardList) {
                 this.clipboardList.style.visibility = 'hidden';
             }
             
-            // Update layout for new window state
             this.detectAndApplyLayout();
-            
             this.loadClipboardHistory();
             this.searchInput.focus();
         });
@@ -274,13 +356,17 @@ class ClipboardManagerUI {
 
         ipcRenderer.on('clipboard-item-added', (event, item) => {
             console.log('UI: New clipboard item received:', item);
-            this.loadClipboardHistory(); // Refresh the list
+            this.loadClipboardHistory();
         });
 
-        // Theme change events
         ipcRenderer.on('theme-changed', (event, theme) => {
             console.log('UI: Theme changed to:', theme);
             this.applyTheme(theme);
+        });
+
+        ipcRenderer.on('horizontal-scroll-changed', (event, enabled) => {
+            console.log('UI: Horizontal scroll setting changed to:', enabled);
+            this.horizontalScrollEnabled = enabled;
         });
     }
 
@@ -336,33 +422,26 @@ class ClipboardManagerUI {
         this.clipboardList.innerHTML = '';
         this.clipboardList.appendChild(fragment);
         
-        // Reapply layout detection after rendering
         this.detectAndApplyLayout();
         
-        // Force immediate layout calculation and positioning
         if (this.isInitialLoad) {
-            // Force all layout calculations to complete
             this.clipboardList.offsetHeight;
             this.clipboardList.offsetWidth;
             
-            // Force each card to calculate its position
             const items = this.clipboardList.querySelectorAll('.clipboard-item');
             items.forEach(item => {
                 item.offsetHeight;
                 item.offsetWidth;
-                item.getBoundingClientRect(); // Force position calculation
+                item.getBoundingClientRect();
             });
             
-            // Force browser to complete all reflows and repaints
             requestAnimationFrame(() => {
                 requestAnimationFrame(() => {
-                    // NOW show the content - everything should be positioned
                     this.clipboardList.style.visibility = 'visible';
                     this.isInitialLoad = false;
                 });
             });
         } else {
-            // For subsequent loads, show immediately
             this.clipboardList.style.visibility = 'visible';
         }
     }
@@ -391,25 +470,6 @@ class ClipboardManagerUI {
             <div class="item-size">${size}</div>
         `;
 
-        // Add error handling for image loading
-        if (item.type === 'image') {
-            const img = div.querySelector('.thumbnail');
-            if (img) {
-                img.addEventListener('error', () => {
-                    console.log('Image thumbnail failed to load');
-                    img.classList.add('error');
-                    const imageInfo = div.querySelector('.image-info');
-                    if (imageInfo) {
-                        imageInfo.textContent = '🖼️ Image (preview failed)';
-                    }
-                });
-                
-                img.addEventListener('load', () => {
-                    console.log('Image thumbnail loaded successfully');
-                });
-            }
-        }
-
         return div;
     }
 
@@ -421,25 +481,28 @@ class ClipboardManagerUI {
                     <span class="image-info">${preview}</span>
                 </div>
             `;
-        } else if (type === 'files') {
-            // Smart icon selection based on preview content
-            let icon = '📁';
-            if (preview.includes('GIF:') || preview.includes('Animated GIF:')) icon = '🎞️';
-            else if (preview.includes('DMG:')) icon = '💿';
-            else if (preview.includes('PDF:')) icon = '📕';
-            else if (preview.includes('Video:')) icon = '🎬';
-            else if (preview.includes('App:')) icon = '📱';
-            else if (preview.includes('Archive:')) icon = '🗜️';
-            else if (preview.includes('Unsupported Image:')) icon = '🖼️';
+        } else if (type === 'text') {
+            // Check if this text is actually a file path
+            const fileInfo = this.fileDetector.detectFileFromText(content);
             
-            return `
-                <div class="files-preview ${this.getFileTypeClass(preview)}">
-                    <span class="file-icon">${icon}</span>
-                    <span class="file-info">${preview}</span>
-                </div>
-            `;
+            if (fileInfo) {
+                return `
+                    <div class="file-preview" data-file-type="${fileInfo.extension}">
+                        <div class="file-icon" style="color: ${fileInfo.color}; font-size: 24px;">
+                            ${fileInfo.icon}
+                        </div>
+                        <div class="file-details">
+                            <div class="file-name">${fileInfo.filename}</div>
+                            <div class="file-type">${fileInfo.name}</div>
+                            ${fileInfo.canThumbnail ? '<div class="thumbnail-hint">📋 System thumbnail available</div>' : ''}
+                        </div>
+                    </div>
+                `;
+            } else {
+                // Regular text
+                return this.escapeHtml(preview || content);
+            }
         } else if (type === 'html') {
-            // Strip HTML tags for preview
             const tempDiv = document.createElement('div');
             tempDiv.innerHTML = content;
             const textContent = tempDiv.textContent || tempDiv.innerText || '';
@@ -447,16 +510,6 @@ class ClipboardManagerUI {
         } else {
             return this.escapeHtml(preview || content);
         }
-    }
-
-    getFileTypeClass(preview) {
-        if (preview.includes('GIF:') || preview.includes('Animated GIF:')) return 'file-gif';
-        if (preview.includes('DMG:')) return 'file-dmg';
-        if (preview.includes('PDF:')) return 'file-pdf';
-        if (preview.includes('Video:')) return 'file-video';
-        if (preview.includes('App:')) return 'file-app';
-        if (preview.includes('Archive:')) return 'file-archive';
-        return 'file-generic';
     }
 
     escapeHtml(text) {
@@ -492,10 +545,8 @@ class ClipboardManagerUI {
         const count = this.clipboardItems.length;
         const statsText = `${count} item${count !== 1 ? 's' : ''}`;
         
-        // Update original stats bar
         this.itemCount.textContent = statsText;
         
-        // Also update header stats if in horizontal mode
         const headerStats = document.querySelector('.header-stats');
         if (headerStats) {
             headerStats.textContent = statsText;
@@ -521,7 +572,6 @@ class ClipboardManagerUI {
         this.contextMenu.style.top = `${y}px`;
         this.contextMenu.style.display = 'block';
 
-        // Update pin text
         const selectedItem = this.clipboardItems.find(item => item.id === this.selectedItemId);
         const pinItem = this.contextMenu.querySelector('[data-action="pin"]');
         if (pinItem && selectedItem) {
@@ -564,17 +614,7 @@ class ClipboardManagerUI {
         this.hideContextMenu();
     }
 
-    async clearHistory() {
-        try {
-            await ipcRenderer.invoke('clear-clipboard-history');
-            this.loadClipboardHistory();
-        } catch (error) {
-            console.error('Error clearing history:', error);
-        }
-    }
-
     showToast(message, type = 'success') {
-        // Create a simple toast notification
         const toast = document.createElement('div');
         toast.className = `toast toast-${type}`;
         toast.textContent = message;
@@ -597,33 +637,16 @@ class ClipboardManagerUI {
 
         document.body.appendChild(toast);
         
-        // Animate in
         setTimeout(() => {
             toast.style.transform = 'translateX(0)';
         }, 10);
 
-        // Animate out and remove
         setTimeout(() => {
             toast.style.transform = 'translateX(100%)';
             setTimeout(() => {
                 document.body.removeChild(toast);
             }, 300);
         }, 2000);
-    }
-}
-
-// Helper function for window position detection
-function getWindowPositionMode() {
-    const windowWidth = window.innerWidth;
-    const windowHeight = window.innerHeight;
-    
-    // Match the same logic as detectAndApplyLayout
-    if (windowWidth > windowHeight * 1.8) {
-        return 'bottom'; // Landscape = bottom bar
-    } else if (Math.abs(windowWidth - windowHeight) < windowWidth * 0.3) {
-        return 'window'; // Square = free window
-    } else {
-        return 'side'; // Portrait = sidebar
     }
 }
 
