@@ -11,6 +11,14 @@ class ClipboardManagerUI {
         this.bindEvents();
         this.loadTheme();
         
+        // Add layout detection
+        this.detectAndApplyLayout();
+        
+        // Listen for window resize to update layout
+        window.addEventListener('resize', () => {
+            this.detectAndApplyLayout();
+        });
+        
         // Load clipboard history immediately when UI starts
         console.log('UI: Constructor - loading clipboard history immediately');
         this.loadClipboardHistory();
@@ -38,6 +46,44 @@ class ClipboardManagerUI {
     applyTheme(theme) {
         console.log('🎨 Applying theme:', theme);
         document.documentElement.setAttribute('data-theme', theme);
+    }
+
+    detectAndApplyLayout() {
+        // Get window dimensions
+        const windowWidth = window.innerWidth;
+        const windowHeight = window.innerHeight;
+        
+        // Determine orientation mode like Paste
+        let mode = 'portrait'; // Default sidebar mode
+        
+        // Very wide = landscape (bottom bar)
+        if (windowWidth > windowHeight * 1.8) {
+            mode = 'landscape';
+        }
+        // More square/balanced = window mode
+        else if (Math.abs(windowWidth - windowHeight) < windowWidth * 0.3) {
+            mode = 'window';
+        }
+        // Otherwise portrait (sidebar)
+        
+        console.log(`Window: ${windowWidth}x${windowHeight}, Mode: ${mode}`);
+        
+        // Apply appropriate classes to clipboard list
+        if (this.clipboardList) {
+            // Remove all mode classes
+            this.clipboardList.classList.remove('landscape', 'window-mode');
+            
+            // Apply the correct mode class
+            if (mode === 'landscape') {
+                this.clipboardList.classList.add('landscape');
+                console.log('Applied landscape layout (bottom bar style)');
+            } else if (mode === 'window') {
+                this.clipboardList.classList.add('window-mode');
+                console.log('Applied window layout (free window style)');
+            } else {
+                console.log('Applied portrait layout (sidebar style)');
+            }
+        }
     }
 
     bindEvents() {
@@ -95,6 +141,9 @@ class ClipboardManagerUI {
             if (this.clipboardList) {
                 this.clipboardList.style.visibility = 'hidden';
             }
+            
+            // Update layout for new window state
+            this.detectAndApplyLayout();
             
             this.loadClipboardHistory();
             this.searchInput.focus();
@@ -167,6 +216,9 @@ class ClipboardManagerUI {
 
         this.clipboardList.innerHTML = '';
         this.clipboardList.appendChild(fragment);
+        
+        // Reapply layout detection after rendering
+        this.detectAndApplyLayout();
         
         // Force immediate layout calculation and positioning
         if (this.isInitialLoad) {
@@ -429,6 +481,21 @@ class ClipboardManagerUI {
                 document.body.removeChild(toast);
             }, 300);
         }, 2000);
+    }
+}
+
+// Helper function for window position detection
+function getWindowPositionMode() {
+    const windowWidth = window.innerWidth;
+    const windowHeight = window.innerHeight;
+    
+    // Match the same logic as detectAndApplyLayout
+    if (windowWidth > windowHeight * 1.8) {
+        return 'bottom'; // Landscape = bottom bar
+    } else if (Math.abs(windowWidth - windowHeight) < windowWidth * 0.3) {
+        return 'window'; // Square = free window
+    } else {
+        return 'side'; // Portrait = sidebar
     }
 }
 
