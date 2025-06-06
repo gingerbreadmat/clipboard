@@ -5,6 +5,7 @@ class ClipboardManagerUI {
         this.clipboardItems = [];
         this.currentSearchQuery = '';
         this.selectedItemId = null;
+        this.isInitialLoad = true; // Track if this is the first load
         
         this.initializeElements();
         this.bindEvents();
@@ -88,6 +89,13 @@ class ClipboardManagerUI {
 
         // IPC events
         ipcRenderer.on('window-shown', () => {
+            this.isInitialLoad = true;
+            
+            // Hide content immediately to prevent any visible layout shifts
+            if (this.clipboardList) {
+                this.clipboardList.style.visibility = 'hidden';
+            }
+            
             this.loadClipboardHistory();
             this.searchInput.focus();
         });
@@ -142,6 +150,7 @@ class ClipboardManagerUI {
             console.log('No items, showing empty state');
             this.clipboardList.innerHTML = '';
             this.clipboardList.appendChild(this.emptyState);
+            this.clipboardList.style.visibility = 'visible';
             return;
         }
 
@@ -158,6 +167,33 @@ class ClipboardManagerUI {
 
         this.clipboardList.innerHTML = '';
         this.clipboardList.appendChild(fragment);
+        
+        // Force immediate layout calculation and positioning
+        if (this.isInitialLoad) {
+            // Force all layout calculations to complete
+            this.clipboardList.offsetHeight;
+            this.clipboardList.offsetWidth;
+            
+            // Force each card to calculate its position
+            const items = this.clipboardList.querySelectorAll('.clipboard-item');
+            items.forEach(item => {
+                item.offsetHeight;
+                item.offsetWidth;
+                item.getBoundingClientRect(); // Force position calculation
+            });
+            
+            // Force browser to complete all reflows and repaints
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    // NOW show the content - everything should be positioned
+                    this.clipboardList.style.visibility = 'visible';
+                    this.isInitialLoad = false;
+                });
+            });
+        } else {
+            // For subsequent loads, show immediately
+            this.clipboardList.style.visibility = 'visible';
+        }
     }
 
     createClipboardItemElement(item) {

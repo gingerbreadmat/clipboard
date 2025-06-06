@@ -530,6 +530,89 @@ body {
     }
 }
 
-.clipboard-item {
+/* Only apply fadeIn animation when NOT initial load */
+.clipboard-item:not(.no-initial-animation) {
     animation: fadeIn 0.3s ease;
+}
+
+/* Force static for initial load items */
+.clipboard-item.no-initial-animation {
+    animation: none !important;
+    transform: translateY(0) !important;
+    opacity: 1 !important;
+}
+
+/* COMPLETE LOCKDOWN for initial load - NO MOVEMENT WHATSOEVER */
+.no-animations {
+    overflow: hidden !important;
+}
+
+.no-animations *,
+.no-animations *::before,
+.no-animations *::after {
+    transition: none !important;
+    animation: none !important;
+    transform: translateY(0) !important; /* FORCE final position */
+    opacity: 1 !important; /* FORCE visible */
+    will-change: auto !important;
+}
+
+.no-animations .clipboard-item {
+    /* FORCE cards to start in final position */
+    animation: none !important;
+    transform: translateY(0) !important; /* NO bottom-up movement */
+    transition: none !important;
+    opacity: 1 !important;
+    position: relative !important;
+    min-height: 160px !important;
+    max-height: 160px !important;
+    height: 160px !important;
+}
+
+.no-animations .clear-btn {
+    /* FORCE search X button to be in place */
+    transform: translateY(-50%) !important; /* Keep centered but no other movement */
+    transition: none !important;
+    opacity: 1 !important;
+    animation: none !important;
+}
+
+.no-animations .clipboard-list {
+    animation: none !important;
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+}
+
+.no-animations .item-content {
+    display: -webkit-box !important;
+    -webkit-line-clamp: 4 !important;
+    -webkit-box-orient: vertical !important;
+    overflow: hidden !important;
+    height: auto !important;
+    flex: 1 !important;
+    word-wrap: break-word !important;
+    white-space: pre-wrap !important;
+    transform: none !important;
+}
+
+.no-animations .image-preview,
+.no-animations .files-preview {
+    opacity: 1 !important;
+    transform: none !important;
+    min-height: 50px !important;
+}
+
+.no-animations .thumbnail {
+    transform: none !important;
+    transition: none !important;
+    display: block !important;
+}
+
+.no-animations .item-header,
+.no-animations .item-size {
+    transform: none !important;
+    opacity: 1 !important;
+    flex-shrink: 0 !important;
+    height: auto !important;
 }

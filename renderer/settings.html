@@ -14,21 +14,34 @@
         </div>
 
         <div class="settings-section">
-            <h2 class="section-title">Layout</h2>
+            <h2 class="section-title">Window Positioning</h2>
             
             <div class="setting-item">
                 <div class="setting-label">
-                    <h3>Window Position</h3>
-                    <p>Choose where the clipboard manager appears on screen</p>
+                    <h3>Opening Behavior</h3>
+                    <p>Choose how the clipboard manager appears when activated</p>
                 </div>
                 <div class="setting-control">
                     <select id="position-selector">
-                        <option value="left">Left Edge</option>
-                        <option value="right">Right Edge</option>
-                        <option value="top">Top Edge</option>
-                        <option value="bottom">Bottom Edge</option>
-                        <option value="window">Free Window</option>
+                        <option value="cursor">📍 Follow Cursor (Recommended)</option>
+                        <option value="cursor-edge">⚡ Nearest Screen Edge</option>
+                        <option value="left">⬅️ Left Edge (Fixed)</option>
+                        <option value="right">➡️ Right Edge (Fixed)</option>
+                        <option value="top">⬆️ Top Edge (Fixed)</option>
+                        <option value="bottom">⬇️ Bottom Edge (Fixed)</option>
+                        <option value="window">🪟 Free Window</option>
                     </select>
+                </div>
+            </div>
+
+            <div class="position-preview" id="position-preview">
+                <div class="preview-info">
+                    <h4>Current Mode: <span id="current-mode">Follow Cursor</span></h4>
+                    <p id="mode-description">Opens near your cursor across all monitors and desktops</p>
+                </div>
+                <div class="display-info" id="display-info">
+                    <span class="info-label">Displays:</span>
+                    <span id="display-count">Loading...</span>
                 </div>
             </div>
         </div>
@@ -43,9 +56,54 @@
                 </div>
                 <div class="setting-control">
                     <select id="theme-selector">
-                        <option value="light">Light</option>
-                        <option value="dark">Dark</option>
+                        <option value="light">☀️ Light</option>
+                        <option value="dark">🌙 Dark</option>
                     </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="settings-section">
+            <h2 class="section-title">Multi-Monitor Setup</h2>
+            
+            <div class="setting-item">
+                <div class="setting-label">
+                    <h3>Display Information</h3>
+                    <p>Current monitor and display configuration</p>
+                </div>
+                <div class="setting-control">
+                    <button class="btn btn-secondary" id="refresh-displays">🔄 Refresh Displays</button>
+                </div>
+            </div>
+
+            <div class="display-list" id="display-list">
+                <!-- Display information will be populated here -->
+            </div>
+        </div>
+
+        <div class="settings-section">
+            <h2 class="section-title">Testing & Debug</h2>
+            
+            <div class="setting-item">
+                <div class="setting-label">
+                    <h3>Test Positioning</h3>
+                    <p>Test how the window opens at your current cursor position</p>
+                </div>
+                <div class="setting-control">
+                    <button class="btn btn-secondary" id="test-position">🎯 Test Current Position</button>
+                </div>
+            </div>
+
+            <div class="setting-item">
+                <div class="setting-label">
+                    <h3>Cursor Information</h3>
+                    <p>Real-time cursor position and display info</p>
+                </div>
+                <div class="setting-control">
+                    <div class="cursor-info" id="cursor-info">
+                        <div>X: <span id="cursor-x">-</span>, Y: <span id="cursor-y">-</span></div>
+                        <div>Display: <span id="cursor-display">-</span></div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -105,6 +163,29 @@
         
         const { ipcRenderer } = require('electron');
         
+        // Position descriptions
+        const positionDescriptions = {
+            'cursor': 'Opens near your cursor across all monitors and desktops',
+            'cursor-edge': 'Snaps to the screen edge closest to your cursor',
+            'left': 'Always opens on the left edge of the primary display',
+            'right': 'Always opens on the right edge of the primary display', 
+            'top': 'Always opens on the top edge of the primary display',
+            'bottom': 'Always opens on the bottom edge of the primary display',
+            'window': 'Opens as a free-floating window that can be moved'
+        };
+
+        const positionNames = {
+            'cursor': 'Follow Cursor',
+            'cursor-edge': 'Nearest Edge',
+            'left': 'Left Edge',
+            'right': 'Right Edge',
+            'top': 'Top Edge', 
+            'bottom': 'Bottom Edge',
+            'window': 'Free Window'
+        };
+
+        let cursorUpdateInterval = null;
+        
         document.addEventListener('DOMContentLoaded', async function() {
             console.log('🔧 DOM loaded');
             
@@ -118,6 +199,11 @@
                 const currentPosition = await ipcRenderer.invoke('get-current-position');
                 console.log('📍 Current position loaded:', currentPosition);
                 document.getElementById('position-selector').value = currentPosition;
+                updatePositionPreview(currentPosition);
+                
+                // Load display information
+                await refreshDisplayInfo();
+                
             } catch (error) {
                 console.error('❌ Failed to load current settings:', error);
             }
@@ -157,6 +243,7 @@
                     try {
                         const result = await ipcRenderer.invoke('set-window-position', selectedPosition);
                         console.log('✅ Position set result:', result);
+                        updatePositionPreview(selectedPosition);
                     } catch (error) {
                         console.error('❌ Failed to set position:', error);
                     }
@@ -173,6 +260,32 @@
                 applyTheme(theme);
                 document.getElementById('theme-selector').value = theme;
             });
+
+            // Test position button
+            document.getElementById('test-position').addEventListener('click', async () => {
+                try {
+                    console.log('🎯 Testing position...');
+                    // Hide settings window temporarily and show main window for testing
+                    await ipcRenderer.invoke('close-settings');
+                    
+                    // Small delay then trigger main window show
+                    setTimeout(async () => {
+                        await ipcRenderer.invoke('test-cursor-position');
+                    }, 100);
+                    
+                } catch (error) {
+                    console.error('❌ Failed to test position:', error);
+                }
+            });
+
+            // Refresh displays button
+            document.getElementById('refresh-displays').addEventListener('click', async () => {
+                console.log('🔄 Refreshing display info...');
+                await refreshDisplayInfo();
+            });
+
+            // Start cursor position tracking
+            startCursorTracking();
 
             // Clear All Data button
             document.getElementById('clear-all-data').addEventListener('click', async () => {
@@ -234,6 +347,108 @@
             console.log('🎨 Applying theme:', theme);
             document.documentElement.setAttribute('data-theme', theme);
         }
+
+        function updatePositionPreview(position) {
+            const modeElement = document.getElementById('current-mode');
+            const descriptionElement = document.getElementById('mode-description');
+            
+            if (modeElement && descriptionElement) {
+                modeElement.textContent = positionNames[position] || position;
+                descriptionElement.textContent = positionDescriptions[position] || 'Unknown position mode';
+            }
+        }
+
+        async function refreshDisplayInfo() {
+            try {
+                const displayInfo = await ipcRenderer.invoke('get-display-info');
+                console.log('📺 Display info:', displayInfo);
+                
+                updateDisplayCount(displayInfo);
+                updateDisplayList(displayInfo);
+                
+            } catch (error) {
+                console.error('❌ Failed to get display info:', error);
+                document.getElementById('display-count').textContent = 'Error loading displays';
+            }
+        }
+
+        function updateDisplayCount(displayInfo) {
+            const countElement = document.getElementById('display-count');
+            if (countElement && displayInfo.displays) {
+                const count = displayInfo.displays.length;
+                countElement.textContent = `${count} display${count !== 1 ? 's' : ''} detected`;
+            }
+        }
+
+        function updateDisplayList(displayInfo) {
+            const listElement = document.getElementById('display-list');
+            if (!listElement || !displayInfo.displays) return;
+            
+            listElement.innerHTML = '';
+            
+            displayInfo.displays.forEach((display, index) => {
+                const displayDiv = document.createElement('div');
+                displayDiv.className = `display-item ${display.isPrimary ? 'primary' : ''} ${display.isCurrent ? 'current' : ''}`;
+                
+                displayDiv.innerHTML = `
+                    <div class="display-header">
+                        <h4>Display ${index + 1} ${display.isPrimary ? '(Primary)' : ''} ${display.isCurrent ? '(Current)' : ''}</h4>
+                        <span class="display-id">ID: ${display.id}</span>
+                    </div>
+                    <div class="display-details">
+                        <div class="display-info-row">
+                            <span>Resolution:</span>
+                            <span>${display.bounds.width} × ${display.bounds.height}</span>
+                        </div>
+                        <div class="display-info-row">
+                            <span>Position:</span>
+                            <span>(${display.bounds.x}, ${display.bounds.y})</span>
+                        </div>
+                        <div class="display-info-row">
+                            <span>Scale Factor:</span>
+                            <span>${display.scaleFactor}×</span>
+                        </div>
+                        <div class="display-info-row">
+                            <span>Work Area:</span>
+                            <span>${display.workArea.width} × ${display.workArea.height}</span>
+                        </div>
+                    </div>
+                `;
+                
+                listElement.appendChild(displayDiv);
+            });
+        }
+
+        function startCursorTracking() {
+            // Update cursor position every 100ms when settings window is visible
+            cursorUpdateInterval = setInterval(async () => {
+                try {
+                    const cursorInfo = await ipcRenderer.invoke('get-cursor-info');
+                    updateCursorDisplay(cursorInfo);
+                } catch (error) {
+                    // Silently fail - don't spam console
+                }
+            }, 100);
+        }
+
+        function updateCursorDisplay(cursorInfo) {
+            const cursorXElement = document.getElementById('cursor-x');
+            const cursorYElement = document.getElementById('cursor-y');
+            const cursorDisplayElement = document.getElementById('cursor-display');
+            
+            if (cursorInfo && cursorXElement && cursorYElement && cursorDisplayElement) {
+                cursorXElement.textContent = cursorInfo.x || '-';
+                cursorYElement.textContent = cursorInfo.y || '-';
+                cursorDisplayElement.textContent = cursorInfo.displayId || '-';
+            }
+        }
+
+        // Clean up when window closes
+        window.addEventListener('beforeunload', () => {
+            if (cursorUpdateInterval) {
+                clearInterval(cursorUpdateInterval);
+            }
+        });
     </script>
 </body>
 </html>

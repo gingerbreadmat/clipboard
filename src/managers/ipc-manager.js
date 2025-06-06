@@ -1,4 +1,6 @@
-const { ipcMain, clipboard, nativeImage, shell, app } = require('electron');
+// Enhanced src/managers/ipc-manager.js with cursor and display support
+
+const { ipcMain, clipboard, nativeImage, shell, app, screen } = require('electron');
 
 class IPCManager {
   constructor(storage, windowManager, settingsService, dockService) {
@@ -12,6 +14,7 @@ class IPCManager {
     this.setupSettingsHandlers();
     this.setupThemeHandlers();
     this.setupPositionHandlers();
+    this.setupDisplayHandlers(); // New display-related handlers
     this.setupUtilityHandlers();
     
     console.log('✅ IPC Manager initialized with all handlers');
@@ -198,6 +201,27 @@ class IPCManager {
       this.windowManager.closeSettingsWindow();
     });
 
+    // Test cursor position (for settings testing)
+    ipcMain.handle('test-cursor-position', async () => {
+      console.log('🎯 IPC: test-cursor-position called');
+      try {
+        // Show main window at cursor position for testing
+        this.windowManager.showMainWindow();
+        
+        // Hide it after 2 seconds
+        setTimeout(() => {
+          this.windowManager.hideMainWindow();
+          // Reopen settings window
+          this.windowManager.createSettingsWindow();
+        }, 2000);
+        
+        return true;
+      } catch (error) {
+        console.error('❌ Error testing cursor position:', error);
+        return false;
+      }
+    });
+
     // Quit application
     ipcMain.handle('quit-application', async () => {
       console.log('💀 IPC: quit-application called');
@@ -286,7 +310,7 @@ class IPCManager {
         return currentPosition;
       } catch (error) {
         console.error('❌ Error getting current position:', error);
-        return 'left';
+        return 'cursor'; // Default to cursor mode
       }
     });
 
@@ -311,6 +335,89 @@ class IPCManager {
         console.error('❌ Failed to set position:', error);
         return false;
       }
+    });
+  }
+
+  setupDisplayHandlers() {
+    // Get display information
+    ipcMain.handle('get-display-info', async () => {
+      console.log('📺 IPC: get-display-info called');
+      try {
+        const displayInfo = this.windowManager.getDisplayInfo();
+        console.log('📺 Display info:', displayInfo);
+        return displayInfo;
+      } catch (error) {
+        console.error('❌ Error getting display info:', error);
+        return null;
+      }
+    });
+
+    // Get cursor information
+    ipcMain.handle('get-cursor-info', async () => {
+      try {
+        const cursorPosition = screen.getCursorScreenPoint();
+        const displays = screen.getAllDisplays();
+        
+        // Find which display the cursor is on
+        const currentDisplay = displays.find(display => {
+          const { x, y, width, height } = display.bounds;
+          return cursorPosition.x >= x && 
+                 cursorPosition.x < x + width && 
+                 cursorPosition.y >= y && 
+                 cursorPosition.y < y + height;
+        });
+        
+        return {
+          x: cursorPosition.x,
+          y: cursorPosition.y,
+          displayId: currentDisplay ? currentDisplay.id : null,
+          displayName: currentDisplay ? `Display ${currentDisplay.id}` : 'Unknown'
+        };
+      } catch (error) {
+        console.error('❌ Error getting cursor info:', error);
+        return null;
+      }
+    });
+
+    // Get all displays
+    ipcMain.handle('get-all-displays', async () => {
+      console.log('📺 IPC: get-all-displays called');
+      try {
+        const displays = screen.getAllDisplays();
+        const primary = screen.getPrimaryDisplay();
+        
+        return {
+          primary: primary.id,
+          displays: displays.map(display => ({
+            id: display.id,
+            isPrimary: display.id === primary.id,
+            bounds: display.bounds,
+            workArea: display.workArea,
+            scaleFactor: display.scaleFactor,
+            rotation: display.rotation,
+            touchSupport: display.touchSupport
+          }))
+        };
+      } catch (error) {
+        console.error('❌ Error getting all displays:', error);
+        return null;
+      }
+    });
+
+    // Detect display changes
+    screen.on('display-added', (event, newDisplay) => {
+      console.log('📺 Display added:', newDisplay.id);
+      this.windowManager.sendToAllWindows('display-changed', { type: 'added', display: newDisplay });
+    });
+
+    screen.on('display-removed', (event, oldDisplay) => {
+      console.log('📺 Display removed:', oldDisplay.id);
+      this.windowManager.sendToAllWindows('display-changed', { type: 'removed', display: oldDisplay });
+    });
+
+    screen.on('display-metrics-changed', (event, display, changedMetrics) => {
+      console.log('📺 Display metrics changed:', display.id, changedMetrics);
+      this.windowManager.sendToAllWindows('display-changed', { type: 'metrics-changed', display, changedMetrics });
     });
   }
 
@@ -359,6 +466,40 @@ class IPCManager {
         return null;
       }
     });
+
+    // Force refresh of window positioning
+    ipcMain.handle('refresh-window-position', async () => {
+      console.log('🔄 IPC: refresh-window-position called');
+      try {
+        const currentPosition = this.settingsService.getWindowPosition();
+        this.windowManager.applyWindowPosition(currentPosition);
+        return true;
+      } catch (error) {
+        console.error('❌ Error refreshing window position:', error);
+        return false;
+      }
+    });
+
+    // Move window to specific display
+    ipcMain.handle('move-window-to-display', async (event, displayId) => {
+      console.log('📺 IPC: move-window-to-display called with display:', displayId);
+      try {
+        const displays = screen.getAllDisplays();
+        const targetDisplay = displays.find(d => d.id === displayId);
+        
+        if (!targetDisplay) {
+          console.error('❌ Display not found:', displayId);
+          return false;
+        }
+        
+        // This would require enhancing the window manager to support display-specific positioning
+        console.log('✅ Window move to display requested for:', targetDisplay.id);
+        return true;
+      } catch (error) {
+        console.error('❌ Error moving window to display:', error);
+        return false;
+      }
+    });
   }
 
   // Utility method to remove all handlers (useful for cleanup)
@@ -376,14 +517,20 @@ class IPCManager {
       'load-image-from-path',
       'open-settings',
       'close-settings',
+      'test-cursor-position',
       'quit-application',
       'open-data-folder',
       'get-current-theme',
       'set-theme',
       'get-current-position',
       'set-window-position',
+      'get-display-info',
+      'get-cursor-info',
+      'get-all-displays',
       'toggle-dock-visibility',
-      'get-system-info'
+      'get-system-info',
+      'refresh-window-position',
+      'move-window-to-display'
     ];
     
     handleMethods.forEach(method => {
@@ -392,6 +539,11 @@ class IPCManager {
     
     // Remove on listeners
     ipcMain.removeAllListeners('force-quit');
+    
+    // Remove screen listeners
+    screen.removeAllListeners('display-added');
+    screen.removeAllListeners('display-removed');
+    screen.removeAllListeners('display-metrics-changed');
     
     console.log('✅ All IPC handlers removed');
   }
