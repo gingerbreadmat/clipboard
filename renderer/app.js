@@ -83,16 +83,101 @@ class ClipboardManagerUI {
             // Remove all mode classes
             this.clipboardList.classList.remove('landscape', 'window-mode');
             
-            // Apply the correct mode class
+            // Apply the correct mode class and layout adjustments
             if (mode === 'landscape') {
                 this.clipboardList.classList.add('landscape');
+                this.applyHorizontalLayout();
                 console.log('Applied landscape layout (bottom bar style) - horizontal scrolling enabled');
             } else if (mode === 'window') {
                 this.clipboardList.classList.add('window-mode');
+                this.applyVerticalLayout();
                 console.log('Applied window layout (free window style)');
             } else {
+                this.applyVerticalLayout();
                 console.log('Applied portrait layout (sidebar style)');
             }
+        }
+    }
+
+    applyHorizontalLayout() {
+        // Move stats to header and restructure for horizontal mode
+        this.moveStatsToHeader();
+        
+        // Add horizontal layout class to body/container
+        document.body.classList.add('horizontal-mode');
+        
+        // Update the header structure for centered search
+        this.updateHeaderForHorizontal();
+    }
+
+    applyVerticalLayout() {
+        // Restore normal layout
+        this.restoreStatsBar();
+        
+        // Remove horizontal layout class
+        document.body.classList.remove('horizontal-mode');
+        
+        // Restore normal header structure
+        this.updateHeaderForVertical();
+    }
+
+    moveStatsToHeader() {
+        const header = document.querySelector('.header');
+        const statsBar = document.querySelector('.stats-bar');
+        const headerContent = document.querySelector('.header-content');
+        
+        if (header && statsBar && headerContent) {
+            // Create stats element in header if it doesn't exist
+            let headerStats = header.querySelector('.header-stats');
+            if (!headerStats) {
+                headerStats = document.createElement('div');
+                headerStats.className = 'header-stats';
+                
+                // Insert before settings button
+                const settingsBtn = headerContent.querySelector('.settings-btn');
+                if (settingsBtn) {
+                    headerContent.insertBefore(headerStats, settingsBtn);
+                } else {
+                    headerContent.appendChild(headerStats);
+                }
+            }
+            
+            // Copy stats content to header
+            headerStats.textContent = statsBar.textContent;
+            
+            // Hide the original stats bar
+            statsBar.style.display = 'none';
+        }
+    }
+
+    restoreStatsBar() {
+        const statsBar = document.querySelector('.stats-bar');
+        const headerStats = document.querySelector('.header-stats');
+        
+        if (statsBar) {
+            // Show the original stats bar
+            statsBar.style.display = 'block';
+        }
+        
+        if (headerStats) {
+            // Remove the header stats element
+            headerStats.remove();
+        }
+    }
+
+    updateHeaderForHorizontal() {
+        const headerContent = document.querySelector('.header-content');
+        if (headerContent) {
+            // Add class for horizontal styling
+            headerContent.classList.add('horizontal-header');
+        }
+    }
+
+    updateHeaderForVertical() {
+        const headerContent = document.querySelector('.header-content');
+        if (headerContent) {
+            // Remove horizontal styling class
+            headerContent.classList.remove('horizontal-header');
         }
     }
 
@@ -118,44 +203,6 @@ class ClipboardManagerUI {
     applyTheme(theme) {
         console.log('🎨 Applying theme:', theme);
         document.documentElement.setAttribute('data-theme', theme);
-    }
-
-    detectAndApplyLayout() {
-        // Get window dimensions
-        const windowWidth = window.innerWidth;
-        const windowHeight = window.innerHeight;
-        
-        // Determine orientation mode like Paste
-        let mode = 'portrait'; // Default sidebar mode
-        
-        // Very wide = landscape (bottom bar)
-        if (windowWidth > windowHeight * 1.8) {
-            mode = 'landscape';
-        }
-        // More square/balanced = window mode
-        else if (Math.abs(windowWidth - windowHeight) < windowWidth * 0.3) {
-            mode = 'window';
-        }
-        // Otherwise portrait (sidebar)
-        
-        console.log(`Window: ${windowWidth}x${windowHeight}, Mode: ${mode}`);
-        
-        // Apply appropriate classes to clipboard list
-        if (this.clipboardList) {
-            // Remove all mode classes
-            this.clipboardList.classList.remove('landscape', 'window-mode');
-            
-            // Apply the correct mode class
-            if (mode === 'landscape') {
-                this.clipboardList.classList.add('landscape');
-                console.log('Applied landscape layout (bottom bar style)');
-            } else if (mode === 'window') {
-                this.clipboardList.classList.add('window-mode');
-                console.log('Applied window layout (free window style)');
-            } else {
-                console.log('Applied portrait layout (sidebar style)');
-            }
-        }
     }
 
     bindEvents() {
@@ -443,7 +490,16 @@ class ClipboardManagerUI {
 
     updateStats() {
         const count = this.clipboardItems.length;
-        this.itemCount.textContent = `${count} item${count !== 1 ? 's' : ''}`;
+        const statsText = `${count} item${count !== 1 ? 's' : ''}`;
+        
+        // Update original stats bar
+        this.itemCount.textContent = statsText;
+        
+        // Also update header stats if in horizontal mode
+        const headerStats = document.querySelector('.header-stats');
+        if (headerStats) {
+            headerStats.textContent = statsText;
+        }
     }
 
     async copyToClipboard(content, type) {

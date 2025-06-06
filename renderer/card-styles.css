@@ -61,6 +61,27 @@
 }
 
 /* ========================================
+   HORIZONTAL MODE OVERRIDES
+   ======================================== */
+
+/* When in horizontal mode, increase card height significantly */
+.horizontal-mode .landscape {
+    --card-height: calc(100vh - 80px); /* Use most of the available height */
+}
+
+/* Adjust main area height for horizontal mode */
+.horizontal-mode .main {
+    height: calc(100vh - 56px); /* Smaller header height */
+}
+
+/* Ensure cards fill the available height properly in horizontal mode */
+.horizontal-mode .clipboard-item {
+    height: var(--card-height);
+    min-height: var(--card-height);
+    max-height: var(--card-height);
+}
+
+/* ========================================
    CARD BASE STYLES
    ======================================== */
 
@@ -194,6 +215,11 @@
     background: #f5f5f5;
     flex-shrink: 0;
     transition: all 0.2s ease;
+}
+
+/* In horizontal mode, allow thumbnails to be larger */
+.horizontal-mode .thumbnail {
+    max-height: calc(var(--card-height) - 120px); /* More space available */
 }
 
 .thumbnail:hover {
@@ -378,4 +404,123 @@
 
 .clipboard-list:not(.landscape)::-webkit-scrollbar-thumb:hover {
     background: rgba(0, 0, 0, 0.3);
+}
+
+/* ========================================
+   HORIZONTAL MODE SPECIFIC STYLES
+   ======================================== */
+
+/* Header modifications for horizontal mode */
+.horizontal-mode .header {
+    padding: 8px 16px; /* Reduced padding */
+}
+
+/* Horizontal header layout */
+.horizontal-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    position: relative;
+}
+
+/* Centered, smaller search container */
+.horizontal-header .search-container {
+    flex: 0 1 400px; /* Fixed max width */
+    max-width: 400px;
+    min-width: 300px;
+    order: 1; /* Ensure it's in the center */
+}
+
+/* Header stats styling (positioned next to settings) */
+.header-stats {
+    position: absolute;
+    right: 60px; /* Next to settings button */
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 12px;
+    color: var(--text-secondary);
+    font-weight: 500;
+    background: var(--bg-quaternary);
+    padding: 4px 8px;
+    border-radius: 4px;
+    border: 1px solid var(--border-light);
+    backdrop-filter: blur(10px);
+}
+
+/* Settings button positioning */
+.horizontal-header .settings-btn {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    order: 3;
+}
+
+/* Hide stats bar in horizontal mode */
+.horizontal-mode .stats-bar {
+    display: none;
+}
+
+/* ========================================
+   RESPONSIVE ADJUSTMENTS FOR HORIZONTAL MODE
+   ======================================== */
+
+/* For very wide screens, make search even smaller */
+@media (min-width: 1400px) {
+    .horizontal-header .search-container {
+        max-width: 350px;
+    }
+    
+    .header-stats {
+        right: 70px; /* Adjust positioning */
+    }
+}
+
+/* For smaller horizontal screens */
+@media (max-width: 900px) {
+    .horizontal-header .search-container {
+        min-width: 250px;
+        max-width: 300px;
+    }
+    
+    .header-stats {
+        right: 55px;
+        font-size: 11px;
+    }
+}
+
+/* ========================================
+   DARK THEME ADJUSTMENTS
+   ======================================== */
+
+[data-theme="dark"] .header-stats {
+    background: var(--bg-tertiary);
+    border-color: var(--border-medium);
+    color: var(--text-secondary);
+}
+
+/* ========================================
+   ANIMATION OVERRIDES FOR HORIZONTAL MODE
+   ======================================== */
+
+/* Ensure no unwanted animations in horizontal mode */
+.horizontal-mode.no-animations .clipboard-item {
+    height: var(--card-height) !important;
+    min-height: var(--card-height) !important;
+    max-height: var(--card-height) !important;
+}
+
+/* ========================================
+   HEADER CENTERING FALLBACK
+   ======================================== */
+
+/* Alternative centering approach if flexbox doesn't work as expected */
+.horizontal-header {
+    text-align: center;
+}
+
+.horizontal-header .search-container {
+    display: inline-block;
+    text-align: left;
 }
