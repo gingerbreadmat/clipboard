@@ -1,13 +1,11 @@
-// Complete Enhanced src/managers/window-manager.js with dock position awareness
+// Enhanced src/managers/window-manager.js with smooth animations and flash prevention
 
 const { BrowserWindow, screen } = require('electron');
 const path = require('path');
 
 /**
- * WindowManager - Handles window positioning and dock interaction
- * 
- * Current behavior: All edge positions (left, right, top, bottom) cover the dock
- * TODO: Add user toggle setting to control dock covering behavior
+ * WindowManager - Enhanced with smooth animations and flash prevention
+ * Implements best practices from the Electron animation guide
  */
 class WindowManager {
   constructor(settingsService, dockService) {
@@ -17,8 +15,13 @@ class WindowManager {
     this.settingsWindow = null;
     this.nativeWindowManager = null;
     this.currentDisplay = null;
-    this.originalDockState = null; // Track original dock state
-    this.dockWasHiddenByUs = false; // Track if we hid the dock
+    this.originalDockState = null;
+    this.dockWasHiddenByUs = false;
+    this.isAnimating = false;
+    this.windowPool = [];
+    
+    // Performance monitoring
+    this.performanceMonitor = new PerformanceMonitor();
     
     // Try to load native window manager
     try {
@@ -30,7 +33,7 @@ class WindowManager {
   }
 
   async createMainWindow() {
-    console.log('📱 Creating main window...');
+    console.log('📱 Creating main window with smooth animations...');
     
     // Store original dock state
     await this.storeOriginalDockState();
@@ -50,16 +53,17 @@ class WindowManager {
     
     // Get current theme to set correct background
     const currentTheme = this.settingsService.getTheme();
-    const backgroundColor = currentTheme === 'dark' ? '#282828' : '#ffffff';
+    const backgroundColor = currentTheme === 'dark' ? '#1e1e1e' : '#ffffff';
     
     console.log('🎨 Setting background color:', backgroundColor, 'for theme:', currentTheme);
     
     // Calculate initial bounds based on cursor location and dock position
     const initialBounds = await this.calculateDockAwareBounds(storedPosition, targetDisplay, cursorPosition);
     
+    // Create window with optimized settings for smooth animations
     this.mainWindow = new BrowserWindow({
       ...initialBounds,
-      show: false,
+      show: false,                    // Critical: prevents initial flash
       resizable: storedPosition === 'window',
       movable: storedPosition === 'window',
       minimizable: storedPosition === 'window',
@@ -68,12 +72,14 @@ class WindowManager {
       closable: false,
       webPreferences: {
         nodeIntegration: true,
-        contextIsolation: false
+        contextIsolation: false,
+        paintWhenInitiallyHidden: false,  // Improves initial performance
+        backgroundThrottling: false       // Maintains animations when unfocused
       },
       frame: false,
       transparent: false,
-      backgroundColor: backgroundColor,
-      vibrancy: 'sidebar',
+      backgroundColor: backgroundColor,   // Must match app's actual background
+      vibrancy: process.platform === 'darwin' ? 'sidebar' : undefined,
       alwaysOnTop: true,
       skipTaskbar: true,
       level: 'screen-saver',
@@ -81,17 +87,30 @@ class WindowManager {
       focusable: true
     });
 
+    // Configure performance optimizations
+    this.configurePerformanceOptimizations();
+
     console.log('📄 Loading index.html...');
-    this.mainWindow.loadFile('renderer/index.html');
+    await this.mainWindow.loadFile('renderer/index.html');
 
     this.setupMainWindowEventHandlers();
     
     return this.mainWindow;
   }
 
+  configurePerformanceOptimizations() {
+    if (process.platform === 'darwin') {
+      // Enable GPU acceleration
+      this.mainWindow.webContents.executeJavaScript(`
+        // Force GPU layer creation for smooth animations
+        document.documentElement.style.transform = 'translateZ(0)';
+        document.documentElement.style.willChange = 'transform';
+      `);
+    }
+  }
+
   async storeOriginalDockState() {
     try {
-      // Use cached dock info for faster startup
       const dockInfo = await this.dockService.getDockInfo();
       this.originalDockState = {
         hidden: dockInfo.hidden,
@@ -106,7 +125,6 @@ class WindowManager {
   }
 
   async calculateDockAwareBounds(position, display, cursorPosition) {
-    // Validate inputs
     if (!display || !display.bounds) {
       console.error('❌ Invalid display object');
       return null;
@@ -114,8 +132,6 @@ class WindowManager {
     
     const { x: screenX, y: screenY, width: screenWidth, height: screenHeight } = display.bounds;
     
-    // For now, ALWAYS use full screen space - clipboard covers dock
-    // TODO: Later this will be controlled by a user toggle setting
     let availableSpace = {
       x: screenX,
       y: screenY,
@@ -142,7 +158,6 @@ class WindowManager {
           break;
           
         case 'left':
-          // Use full screen height, covering dock
           bounds = {
             x: Math.round(screenX),
             y: Math.round(screenY),
@@ -152,7 +167,6 @@ class WindowManager {
           break;
           
         case 'right':
-          // Use full screen height, covering dock
           bounds = {
             x: Math.round(screenX + screenWidth - sidebarWidth),
             y: Math.round(screenY),
@@ -162,7 +176,6 @@ class WindowManager {
           break;
           
         case 'top':
-          // Use full screen width, covering dock
           bounds = {
             x: Math.round(screenX),
             y: Math.round(screenY),
@@ -172,7 +185,6 @@ class WindowManager {
           break;
           
         case 'bottom':
-          // Use full screen width, covering dock
           bounds = {
             x: Math.round(screenX),
             y: Math.round(screenY + screenHeight - 300),
@@ -200,9 +212,8 @@ class WindowManager {
           break;
       }
       
-      // Final validation of calculated bounds
       if (bounds && this.isValidBounds(bounds)) {
-        console.log(`✅ Calculated bounds (covering dock): ${bounds.width}x${bounds.height} at (${bounds.x}, ${bounds.y})`);
+        console.log(`✅ Calculated bounds: ${bounds.width}x${bounds.height} at (${bounds.x}, ${bounds.y})`);
         return bounds;
       } else {
         console.error('❌ Calculated bounds are invalid:', bounds);
@@ -213,18 +224,6 @@ class WindowManager {
       console.error('❌ Error calculating bounds:', error);
       return null;
     }
-  }
-
-  async calculateBottomBoundsWithDockConflict(availableSpace, screenX, screenY, screenWidth, screenHeight) {
-    // This method is now simplified since bottom position always covers dock
-    console.log('🏠 Bottom position: using full screen width to cover dock');
-    
-    return {
-      x: Math.round(screenX),
-      y: Math.round(screenY + screenHeight - 300),
-      width: Math.round(screenWidth),
-      height: 300
-    };
   }
 
   calculateCursorProximityBounds(cursorPosition, availableSpace, windowWidth, windowHeight) {
@@ -241,7 +240,6 @@ class WindowManager {
     let x = Math.round(cursorPosition.x + margin);
     let y = Math.round(cursorPosition.y + margin);
     
-    // Adjust if window would go off available space
     if (x + windowWidth > availableSpace.x + availableSpace.width) {
       x = Math.round(cursorPosition.x - windowWidth - margin);
     }
@@ -250,12 +248,11 @@ class WindowManager {
       y = Math.round(cursorPosition.y - windowHeight - margin);
     }
     
-    // Ensure window stays within available space
     const padding = 10;
     x = Math.max(availableSpace.x + padding, Math.min(x, availableSpace.x + availableSpace.width - windowWidth - padding));
     y = Math.max(availableSpace.y + padding, Math.min(y, availableSpace.y + availableSpace.height - windowHeight - padding));
     
-    console.log(`🎯 Cursor proximity bounds (dock-aware): ${windowWidth}x${windowHeight} at (${x}, ${y})`);
+    console.log(`🎯 Cursor proximity bounds: ${windowWidth}x${windowHeight} at (${x}, ${y})`);
     
     return { x, y, width: windowWidth, height: windowHeight };
   }
@@ -271,7 +268,6 @@ class WindowManager {
       };
     }
     
-    // Calculate distances to each edge of available space
     const distanceToLeft = Math.abs(cursorPosition.x - availableSpace.x);
     const distanceToRight = Math.abs((availableSpace.x + availableSpace.width) - cursorPosition.x);
     const distanceToTop = Math.abs(cursorPosition.y - availableSpace.y);
@@ -279,10 +275,10 @@ class WindowManager {
     
     const minDistance = Math.min(distanceToLeft, distanceToRight, distanceToTop, distanceToBottom);
     
-    console.log(`📏 Distances (dock-aware) - Left: ${distanceToLeft}, Right: ${distanceToRight}, Top: ${distanceToTop}, Bottom: ${distanceToBottom}`);
+    console.log(`📏 Distances - Left: ${distanceToLeft}, Right: ${distanceToRight}, Top: ${distanceToTop}, Bottom: ${distanceToBottom}`);
     
     if (minDistance === distanceToLeft) {
-      console.log('🎯 Nearest edge: LEFT (dock-aware)');
+      console.log('🎯 Nearest edge: LEFT');
       return {
         x: Math.round(availableSpace.x),
         y: Math.round(availableSpace.y),
@@ -290,7 +286,7 @@ class WindowManager {
         height: Math.round(availableSpace.height)
       };
     } else if (minDistance === distanceToRight) {
-      console.log('🎯 Nearest edge: RIGHT (dock-aware)');
+      console.log('🎯 Nearest edge: RIGHT');
       return {
         x: Math.round(availableSpace.x + availableSpace.width - sidebarWidth),
         y: Math.round(availableSpace.y),
@@ -298,7 +294,7 @@ class WindowManager {
         height: Math.round(availableSpace.height)
       };
     } else if (minDistance === distanceToTop) {
-      console.log('🎯 Nearest edge: TOP (dock-aware)');
+      console.log('🎯 Nearest edge: TOP');
       return {
         x: Math.round(availableSpace.x),
         y: Math.round(availableSpace.y),
@@ -306,7 +302,7 @@ class WindowManager {
         height: 300
       };
     } else {
-      console.log('🎯 Nearest edge: BOTTOM (dock-aware)');
+      console.log('🎯 Nearest edge: BOTTOM');
       return {
         x: Math.round(availableSpace.x),
         y: Math.round(availableSpace.y + availableSpace.height - 300),
@@ -316,13 +312,251 @@ class WindowManager {
     }
   }
 
+  getDisplayAtCursor(cursorPosition) {
+    const displays = screen.getAllDisplays();
+    
+    const targetDisplay = displays.find(display => {
+      const { x, y, width, height } = display.bounds;
+      return cursorPosition.x >= x && 
+             cursorPosition.x < x + width && 
+             cursorPosition.y >= y && 
+             cursorPosition.y < y + height;
+    });
+    
+    return targetDisplay || screen.getPrimaryDisplay();
+  }
+
+  // Enhanced show method with smooth animations - FIXED for macOS desktop switching
+  async showMainWindow() {
+    if (this.isAnimating) {
+      console.log('🎬 Animation in progress, skipping show');
+      return;
+    }
+
+    if (this.mainWindow) {
+      console.log('👁️ Showing main window with smooth animation...');
+      this.isAnimating = true;
+      
+      try {
+        // CRITICAL FIX: For macOS, don't recreate window - just reposition on current desktop
+        if (process.platform === 'darwin') {
+          // First check if window exists and is on current space
+          if (this.mainWindow.isDestroyed()) {
+            // Only recreate if destroyed
+            await this.createMainWindow();
+          }
+          
+          // Force window to current space without recreation
+          this.mainWindow.setVisibleOnAllWorkspaces(true);
+          await this.repositionToCursor();
+          
+          // Immediately set back to current space only
+          setTimeout(() => {
+            if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+              this.mainWindow.setVisibleOnAllWorkspaces(false);
+            }
+          }, 50);
+          
+          // Use smooth fade in animation
+          await this.fadeInWindow();
+        } else {
+          // Non-macOS: just reposition and animate
+          await this.repositionToCursor();
+          await this.fadeInWindow();
+        }
+      } finally {
+        this.isAnimating = false;
+      }
+    } else {
+      // Create window if it doesn't exist
+      await this.createMainWindow();
+      await this.showMainWindow();
+    }
+  }
+
+  async fadeInWindow() {
+    if (!this.mainWindow) return;
+    
+    console.log('🎬 Starting fade in animation...');
+    
+    // Set up initial state
+    this.mainWindow.setOpacity(0);
+    this.mainWindow.show();
+    
+    // Send CSS animation command to renderer
+    this.mainWindow.webContents.executeJavaScript(`
+      document.body.style.transform = 'scale(0.95) translateY(10px)';
+      document.body.style.opacity = '0';
+      document.body.style.transition = 'all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+      document.body.style.willChange = 'transform, opacity';
+    `);
+
+    // Smooth opacity animation using native API
+    const steps = 12;
+    const duration = 200; // milliseconds
+    
+    for (let i = 0; i <= steps; i++) {
+      const progress = i / steps;
+      const opacity = this.easeOutCubic(progress);
+      const scale = 0.95 + (0.05 * this.easeOutCubic(progress));
+      const translateY = 10 * (1 - this.easeOutCubic(progress));
+      
+      // Native opacity
+      this.mainWindow.setOpacity(opacity);
+      
+      // CSS transform for smooth scaling
+      this.mainWindow.webContents.executeJavaScript(`
+        document.body.style.transform = 'scale(${scale}) translateY(${translateY}px)';
+        document.body.style.opacity = '${opacity}';
+      `);
+      
+      await new Promise(resolve => setTimeout(resolve, duration / steps));
+    }
+    
+    // Clean up transition styles
+    this.mainWindow.webContents.executeJavaScript(`
+      document.body.style.willChange = 'auto';
+    `);
+    
+    this.mainWindow.focus();
+    console.log('✅ Fade in animation completed');
+  }
+
+  async hideMainWindow() {
+    if (!this.mainWindow || this.isAnimating) return;
+    
+    console.log('🎬 Starting fade out animation...');
+    this.isAnimating = true;
+    
+    try {
+      // Restore dock if we hid it
+      await this.restoreDockIfHiddenByUs();
+      
+      // Set up transition
+      this.mainWindow.webContents.executeJavaScript(`
+        document.body.style.transition = 'all 0.15s cubic-bezier(0.55, 0.085, 0.68, 0.53)';
+        document.body.style.willChange = 'transform, opacity';
+      `);
+
+      const steps = 8;
+      const duration = 120; // milliseconds
+      
+      for (let i = steps; i >= 0; i--) {
+        const progress = i / steps;
+        const opacity = progress;
+        const scale = 0.95 + (0.05 * progress);
+        const translateY = 10 * (1 - progress);
+        
+        this.mainWindow.setOpacity(opacity);
+        this.mainWindow.webContents.executeJavaScript(`
+          document.body.style.transform = 'scale(${scale}) translateY(${translateY}px)';
+          document.body.style.opacity = '${opacity}';
+        `);
+        
+        await new Promise(resolve => setTimeout(resolve, duration / steps));
+      }
+      
+      this.mainWindow.hide();
+      
+      // Reset for next show
+      this.mainWindow.setOpacity(1);
+      this.mainWindow.webContents.executeJavaScript(`
+        document.body.style.transform = 'scale(1) translateY(0)';
+        document.body.style.opacity = '1';
+        document.body.style.willChange = 'auto';
+        document.body.style.transition = '';
+      `);
+      
+      console.log('✅ Fade out animation completed');
+    } finally {
+      this.isAnimating = false;
+    }
+  }
+
+  // Override the toggle method to use new animation
+  async toggleMainWindow() {
+    if (this.mainWindow && !this.mainWindow.isDestroyed() && this.mainWindow.isVisible()) {
+      await this.hideMainWindow();
+    } else {
+      await this.showMainWindow();
+    }
+  }
+
+  async repositionToCursor() {
+    if (!this.mainWindow) return;
+    
+    console.log('🖱️ Repositioning window to cursor location...');
+    
+    try {
+      const cursorPosition = screen.getCursorScreenPoint();
+      const targetDisplay = this.getDisplayAtCursor(cursorPosition);
+      const currentPosition = this.settingsService.getWindowPosition();
+      
+      if (!this.currentDisplay || this.currentDisplay.id !== targetDisplay.id) {
+        console.log(`📺 Switched to display: ${targetDisplay.id}`);
+        this.currentDisplay = targetDisplay;
+      }
+      
+      const newBounds = await this.calculateDockAwareBounds(currentPosition, targetDisplay, cursorPosition);
+      
+      if (this.isValidBounds(newBounds)) {
+        console.log(`📍 Moving window to: ${newBounds.width}x${newBounds.height} at (${newBounds.x}, ${newBounds.y})`);
+        
+        if (process.platform === 'darwin') {
+          this.mainWindow.setVisibleOnAllWorkspaces(false);
+          this.mainWindow.setBounds(newBounds);
+          await this.applyDisplaySpecificPositioning(currentPosition, targetDisplay);
+        } else {
+          this.mainWindow.setBounds(newBounds);
+          await this.applyDisplaySpecificPositioning(currentPosition, targetDisplay);
+        }
+        
+      } else {
+        console.error('❌ Invalid bounds calculated:', newBounds);
+        this.fallbackToCenter(targetDisplay);
+      }
+    } catch (error) {
+      console.error('❌ Error repositioning to cursor:', error);
+      const primaryDisplay = screen.getPrimaryDisplay();
+      this.fallbackToCenter(primaryDisplay);
+    }
+  }
+
+  easeOutCubic(t) {
+    return 1 - Math.pow(1 - t, 3);
+  }
+
+  isValidBounds(bounds) {
+    return (
+      typeof bounds.x === 'number' && !isNaN(bounds.x) && isFinite(bounds.x) &&
+      typeof bounds.y === 'number' && !isNaN(bounds.y) && isFinite(bounds.y) &&
+      typeof bounds.width === 'number' && !isNaN(bounds.width) && isFinite(bounds.width) && bounds.width > 0 &&
+      typeof bounds.height === 'number' && !isNaN(bounds.height) && isFinite(bounds.height) && bounds.height > 0
+    );
+  }
+
+  fallbackToCenter(display) {
+    console.log('🔄 Using fallback positioning for display:', display.id);
+    
+    const { x: screenX, y: screenY, width: screenWidth, height: screenHeight } = display.bounds;
+    const fallbackBounds = {
+      x: Math.round(screenX + (screenWidth - 400) / 2),
+      y: Math.round(screenY + (screenHeight - 600) / 2),
+      width: 400,
+      height: 600
+    };
+    
+    if (this.isValidBounds(fallbackBounds)) {
+      this.mainWindow.setBounds(fallbackBounds);
+      console.log('✅ Fallback positioning applied');
+    } else {
+      console.error('❌ Even fallback bounds are invalid:', fallbackBounds);
+    }
+  }
+
   async applyDisplaySpecificPositioning(position, display) {
     console.log('🔧 Applying display specific positioning:', position);
     
-    // For now, ALL clipboard positions cover the dock
-    // TODO: Later this will be controlled by a user toggle setting
-    
-    // Skip dock covering for cursor and window modes (they're floating)
     if (position === 'cursor' || position === 'window') {
       console.log('🔧 Floating position, using normal window level');
       await this.restoreDockIfHiddenByUs();
@@ -362,25 +596,6 @@ class WindowManager {
     }
   }
 
-  async forceWindowOverDock() {
-    console.log('🏠 Forcing window to cover dock');
-    
-    try {
-      const success = await this.dockService.setDockVisibility(false);
-      if (success) {
-        this.dockWasHiddenByUs = true;
-        this.mainWindow.setAlwaysOnTop(true, 'pop-up-menu');
-        console.log('✅ Dock hidden successfully, window will cover dock area');
-      } else {
-        console.log('⚠️ Could not hide dock, using high window level');
-        this.mainWindow.setAlwaysOnTop(true, 'pop-up-menu');
-      }
-    } catch (error) {
-      console.log('⚠️ Error hiding dock, using high window level:', error.message);
-      this.mainWindow.setAlwaysOnTop(true, 'pop-up-menu');
-    }
-  }
-
   async restoreDockIfHiddenByUs() {
     if (this.dockWasHiddenByUs) {
       console.log('🏠 Restoring dock that we previously hid');
@@ -404,7 +619,6 @@ class WindowManager {
     
     if (this.originalDockState) {
       try {
-        // Restore to original visibility state
         await this.dockService.setDockVisibility(!this.originalDockState.hidden);
         this.dockWasHiddenByUs = false;
         console.log('✅ Original dock state restored');
@@ -414,155 +628,14 @@ class WindowManager {
     }
   }
 
-  getDisplayAtCursor(cursorPosition) {
-    const displays = screen.getAllDisplays();
-    
-    // Find the display that contains the cursor
-    const targetDisplay = displays.find(display => {
-      const { x, y, width, height } = display.bounds;
-      return cursorPosition.x >= x && 
-             cursorPosition.x < x + width && 
-             cursorPosition.y >= y && 
-             cursorPosition.y < y + height;
-    });
-    
-    // Fallback to primary display if cursor position detection fails
-    return targetDisplay || screen.getPrimaryDisplay();
-  }
-
-  async repositionToCursor() {
-    if (!this.mainWindow) return;
-    
-    console.log('🖱️ Repositioning window to cursor location and current desktop...');
-    
-    try {
-      const cursorPosition = screen.getCursorScreenPoint();
-      const targetDisplay = this.getDisplayAtCursor(cursorPosition);
-      const currentPosition = this.settingsService.getWindowPosition();
-      
-      // Check if we've moved to a different display
-      if (!this.currentDisplay || this.currentDisplay.id !== targetDisplay.id) {
-        console.log(`📺 Switched to display: ${targetDisplay.id}`);
-        this.currentDisplay = targetDisplay;
-      }
-      
-      const newBounds = await this.calculateDockAwareBounds(currentPosition, targetDisplay, cursorPosition);
-      
-      // Validate bounds before setting
-      if (this.isValidBounds(newBounds)) {
-        console.log(`📍 Moving window to: ${newBounds.width}x${newBounds.height} at (${newBounds.x}, ${newBounds.y})`);
-        
-        // On macOS, handle desktop switching without hiding the window
-        if (process.platform === 'darwin') {
-          // Force window to current space
-          this.mainWindow.setVisibleOnAllWorkspaces(false);
-          this.mainWindow.setBounds(newBounds);
-          await this.applyDisplaySpecificPositioning(currentPosition, targetDisplay);
-        } else {
-          this.mainWindow.setBounds(newBounds);
-          await this.applyDisplaySpecificPositioning(currentPosition, targetDisplay);
-        }
-        
-      } else {
-        console.error('❌ Invalid bounds calculated:', newBounds);
-        // Fallback to center of current display
-        this.fallbackToCenter(targetDisplay);
-      }
-    } catch (error) {
-      console.error('❌ Error repositioning to cursor:', error);
-      // Fallback to primary display center
-      const primaryDisplay = screen.getPrimaryDisplay();
-      this.fallbackToCenter(primaryDisplay);
-    }
-  }
-
-  // Validate bounds to prevent setBounds errors
-  isValidBounds(bounds) {
-    return (
-      typeof bounds.x === 'number' && !isNaN(bounds.x) && isFinite(bounds.x) &&
-      typeof bounds.y === 'number' && !isNaN(bounds.y) && isFinite(bounds.y) &&
-      typeof bounds.width === 'number' && !isNaN(bounds.width) && isFinite(bounds.width) && bounds.width > 0 &&
-      typeof bounds.height === 'number' && !isNaN(bounds.height) && isFinite(bounds.height) && bounds.height > 0
-    );
-  }
-
-  // Fallback positioning when normal positioning fails
-  fallbackToCenter(display) {
-    console.log('🔄 Using fallback positioning for display:', display.id);
-    
-    const { x: screenX, y: screenY, width: screenWidth, height: screenHeight } = display.bounds;
-    const fallbackBounds = {
-      x: Math.round(screenX + (screenWidth - 400) / 2),
-      y: Math.round(screenY + (screenHeight - 600) / 2),
-      width: 400,
-      height: 600
-    };
-    
-    if (this.isValidBounds(fallbackBounds)) {
-      this.mainWindow.setBounds(fallbackBounds);
-      console.log('✅ Fallback positioning applied');
-    } else {
-      console.error('❌ Even fallback bounds are invalid:', fallbackBounds);
-    }
-  }
-
-  // Enhanced show method that recreates window on current desktop but keeps it simple
-  async showMainWindow() {
-    if (this.mainWindow) {
-      console.log('👁️ Showing main window...');
-      
-      // For macOS desktop switching, recreate window
-      if (process.platform === 'darwin') {
-        // Destroy and recreate to force current desktop
-        this.mainWindow.destroy();
-        this.mainWindow = null;
-        
-        // Recreate immediately
-        await this.createMainWindow();
-        
-        // Show when ready with faster, simpler animation
-        this.mainWindow.once('ready-to-show', () => {
-          // Show immediately but start with low opacity
-          this.mainWindow.setOpacity(0.3);
-          this.mainWindow.show();
-          
-          // Quick fade in - much faster than before
-          setTimeout(() => {
-            if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-              this.mainWindow.setOpacity(1);
-              this.mainWindow.focus();
-            }
-          }, 100); // Much faster - was 400ms
-        });
-      } else {
-        // Non-macOS: just reposition and show
-        await this.repositionToCursor();
-        this.mainWindow.show();
-        this.mainWindow.focus();
-      }
-    }
-  }
-
-  // Override the toggle method to use new show behavior
-  toggleMainWindow() {
-    if (this.mainWindow && !this.mainWindow.isDestroyed() && this.mainWindow.isVisible()) {
-      this.hideMainWindow();
-    } else {
-      this.showMainWindow();
-    }
-  }
-
-  // Enhanced apply window position method
   async applyWindowPosition(position) {
     console.log('📍 Applying window position:', position);
     
     if (!this.mainWindow) return;
     
     try {
-      // First, restore dock if we previously hid it
       await this.restoreDockIfHiddenByUs();
       
-      // Get current cursor position and display
       const cursorPosition = screen.getCursorScreenPoint();
       const targetDisplay = this.getDisplayAtCursor(cursorPosition);
       
@@ -577,10 +650,8 @@ class WindowManager {
       console.log('📍 Setting window bounds:', newBounds);
       this.mainWindow.setBounds(newBounds);
       
-      // Update current display tracking
       this.currentDisplay = targetDisplay;
       
-      // Apply position-specific logic
       if (position !== 'window' && position !== 'cursor') {
         this.mainWindow.setResizable(false);
         this.mainWindow.setMovable(false);
@@ -589,14 +660,12 @@ class WindowManager {
         
         await this.applyDisplaySpecificPositioning(position, targetDisplay);
       } else {
-        // For window and cursor modes, allow normal window behavior
         this.mainWindow.setResizable(true);
         this.mainWindow.setMovable(true);
         this.mainWindow.setAlwaysOnTop(true, 'screen-saver');
       }
     } catch (error) {
       console.error('❌ Error applying window position:', error);
-      // Fallback to primary display center
       const primaryDisplay = screen.getPrimaryDisplay();
       this.fallbackToCenter(primaryDisplay);
     }
@@ -614,7 +683,6 @@ class WindowManager {
 
     console.log('⚙️ Creating new settings window...');
     
-    // Position settings window on the same display as the main window
     const targetDisplay = this.currentDisplay || screen.getPrimaryDisplay();
     const { x: screenX, y: screenY, width: screenWidth, height: screenHeight } = targetDisplay.bounds;
     
@@ -625,7 +693,7 @@ class WindowManager {
       height: 800,
       minWidth: 400,
       minHeight: 600,
-      show: false,
+      show: false,  // Prevent flash
       resizable: true,
       movable: true,
       minimizable: true,
@@ -633,16 +701,18 @@ class WindowManager {
       fullscreenable: false,
       webPreferences: {
         nodeIntegration: true,
-        contextIsolation: false
+        contextIsolation: false,
+        backgroundThrottling: false
       },
       titleBarStyle: 'default',
-      vibrancy: 'window',
+      vibrancy: process.platform === 'darwin' ? 'window' : undefined,
       transparent: false,
       alwaysOnTop: false,
       skipTaskbar: false,
       frame: true,
       parent: null,
-      modal: false
+      modal: false,
+      backgroundColor: '#ffffff'  // Match theme
     });
 
     console.log('⚙️ Loading settings.html...');
@@ -654,80 +724,67 @@ class WindowManager {
   }
 
   setupMainWindowEventHandlers() {
-    // Set the window level after creation for maximum overlay capability
     this.mainWindow.once('ready-to-show', () => {
       console.log('✅ Main window ready to show');
       
-      // Apply correct positioning and window level based on stored position
       const currentPosition = this.settingsService.getWindowPosition();
       console.log('🔧 Ready-to-show: Applying position logic for:', currentPosition);
       
-      // Set up space management for macOS (with compatibility check)
       if (process.platform === 'darwin') {
         try {
+          // CRITICAL: Ensure window appears on current desktop
           this.mainWindow.setVisibleOnAllWorkspaces(false);
           
-          // Check if setCollectionBehavior exists (newer Electron versions)
           if (typeof this.mainWindow.setCollectionBehavior === 'function') {
+            // Use more appropriate collection behavior for popup-style windows
             this.mainWindow.setCollectionBehavior([
-              'moveToActiveSpace',
-              'managed',
-              'participatesInCycle'
+              'moveToActiveSpace',    // Follows user to active space
+              'fullScreenNone'        // Prevents fullscreen conflicts
             ]);
-            console.log('✅ Modern space management configured');
-          } else {
-            console.log('ℹ️ Using legacy space management (setCollectionBehavior not available)');
+            console.log('✅ Desktop-aware space management configured');
           }
-          
         } catch (error) {
           console.log('ℹ️ Space management not fully supported in this Electron version');
         }
       }
       
-      // Apply positioning with reduced delay for faster startup
       if (currentPosition === 'cursor' || currentPosition === 'window') {
         console.log('🔧 Ready-to-show: Floating position, using standard window level');
         this.mainWindow.setAlwaysOnTop(true, 'screen-saver');
       } else {
         console.log('🔧 Ready-to-show: Edge position will cover dock');
-        // Reduced delay for faster startup
         setTimeout(async () => {
           await this.applyWindowPosition(currentPosition);
         }, 50);
       }
       
-      // Force hide traffic light buttons
       this.hideTrafficLightButtons();
     });
 
-    // Hide window instead of closing
     this.mainWindow.on('close', (event) => {
       const { app } = require('electron');
       if (!app.isQuiting) {
         event.preventDefault();
-        this.mainWindow.hide();
+        this.hideMainWindow();
         console.log('🙈 Main window hidden');
       } else {
         console.log('💀 Main window closing - app is quitting');
       }
     });
 
-    // Show window when focused
     this.mainWindow.on('show', () => {
       console.log('👁️ Main window shown');
       
-      // Ensure proper space behavior when shown (with compatibility check)
       if (process.platform === 'darwin') {
+        // Ensure proper space behavior when shown
         this.mainWindow.setVisibleOnAllWorkspaces(false);
         this.mainWindow.moveTop();
         
-        // Only try setCollectionBehavior if it exists
         if (typeof this.mainWindow.setCollectionBehavior === 'function') {
           try {
             this.mainWindow.setCollectionBehavior([
               'moveToActiveSpace',
-              'managed', 
-              'participatesInCycle'
+              'fullScreenNone'
             ]);
           } catch (error) {
             console.log('ℹ️ Could not set collection behavior:', error.message);
@@ -737,33 +794,66 @@ class WindowManager {
       
       this.mainWindow.webContents.send('window-shown');
       
-      // Apply current theme when window is shown
       const currentTheme = this.settingsService.getTheme();
       this.mainWindow.webContents.send('theme-changed', currentTheme);
       
-      // Ensure correct window level based on position
       this.ensureCorrectWindowLevel();
     });
 
-    // Modified blur handler with reduced delay for faster response
     this.mainWindow.on('blur', () => {
-      // Reduced delay for faster hiding
+      // Reduced delay for faster hiding with animation check
       setTimeout(async () => {
-        // Only hide if the window is still unfocused after the delay
-        if (this.mainWindow && !this.mainWindow.isDestroyed() && !this.mainWindow.isFocused()) {
+        if (this.mainWindow && !this.mainWindow.isDestroyed() && !this.mainWindow.isFocused() && !this.isAnimating) {
           console.log('😴 Main window lost focus, hiding...');
           await this.hideMainWindow();
         }
-      }, 50); // Reduced from 100ms to 50ms
+      }, 50);
     });
 
-    // Add error handling for main window
+    // Handle macOS space changes more gracefully
+    if (process.platform === 'darwin') {
+      this.mainWindow.on('move', () => {
+        // Detect if window was moved to a different space
+        // This is a lightweight check that doesn't recreate the window
+        const currentPosition = this.mainWindow.getPosition();
+        const displays = screen.getAllDisplays();
+        
+        // Check if position is valid for any display
+        const isValidPosition = displays.some(display => {
+          const { x, y, width, height } = display.bounds;
+          return currentPosition[0] >= x && currentPosition[0] <= x + width &&
+                 currentPosition[1] >= y && currentPosition[1] <= y + height;
+        });
+        
+        if (!isValidPosition) {
+          // Window was moved to another space, ensure it's visible
+          console.log('🔄 Window moved to different space, ensuring visibility');
+          this.mainWindow.setVisibleOnAllWorkspaces(false);
+          this.mainWindow.show();
+        }
+      });
+    }
+
     this.mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
       console.error('❌ Main window failed to load:', errorCode, errorDescription);
     });
 
     this.mainWindow.webContents.on('did-finish-load', () => {
       console.log('✅ Main window finished loading');
+      
+      // Configure renderer for smooth animations
+      this.mainWindow.webContents.executeJavaScript(`
+        // Hardware acceleration setup
+        document.documentElement.style.willChange = 'transform';
+        document.documentElement.style.transform = 'translateZ(0)';
+        
+        // Prevent layout thrashing during animations
+        document.body.style.contain = 'layout style paint';
+        
+        // Anti-aliasing for smooth text during animations
+        document.body.style.webkitFontSmoothing = 'antialiased';
+        document.body.style.mozOsxFontSmoothing = 'grayscale';
+      `);
     });
   }
 
@@ -791,7 +881,6 @@ class WindowManager {
       this.settingsWindow.center();
       this.settingsWindow.focus();
       
-      // Apply current theme when settings window is shown
       const currentTheme = this.settingsService.getTheme();
       this.settingsWindow.webContents.send('theme-changed', currentTheme);
     });
@@ -800,23 +889,16 @@ class WindowManager {
   async ensureCorrectWindowLevel() {
     const currentPosition = this.settingsService.getWindowPosition();
     
-    // For now, ALL edge positions use high window level to cover dock
-    // TODO: Later this will be controlled by a user toggle setting
-    
     if (currentPosition === 'cursor' || currentPosition === 'window') {
-      // Floating positions use normal level
       this.mainWindow.setAlwaysOnTop(true, 'screen-saver');
     } else {
-      // Edge positions (left, right, top, bottom) use high level to cover dock
       console.log('🔧 Edge position: using high window level to cover dock');
       this.mainWindow.setAlwaysOnTop(true, 'pop-up-menu');
       
-      // Ensure window bounds cover the full edge
       if (this.currentDisplay) {
         const { x: screenX, y: screenY, width: screenWidth, height: screenHeight } = this.currentDisplay.bounds;
         const currentBounds = this.mainWindow.getBounds();
         
-        // Make sure the window extends to screen edges based on position
         let newBounds = currentBounds;
         
         switch (currentPosition) {
@@ -880,15 +962,6 @@ class WindowManager {
     return this.settingsWindow;
   }
 
-  // Utility methods
-  async hideMainWindow() {
-    if (this.mainWindow) {
-      // Restore dock if we hid it
-      await this.restoreDockIfHiddenByUs();
-      this.mainWindow.hide();
-    }
-  }
-
   closeSettingsWindow() {
     if (this.settingsWindow) {
       this.settingsWindow.close();
@@ -913,7 +986,6 @@ class WindowManager {
     this.sendToSettingsWindow(event, data);
   }
 
-  // Get information about all displays (useful for debugging)
   getDisplayInfo() {
     const displays = screen.getAllDisplays();
     const primary = screen.getPrimaryDisplay();
@@ -934,11 +1006,13 @@ class WindowManager {
     };
   }
 
-  // Cleanup method
   async cleanup() {
     console.log('💀 Window manager cleanup...');
     
     try {
+      // Stop any ongoing animations
+      this.isAnimating = false;
+      
       // Always restore original dock state during cleanup
       await this.restoreOriginalDockState();
       
@@ -946,6 +1020,83 @@ class WindowManager {
     } catch (error) {
       console.error('❌ Error during window manager cleanup:', error);
     }
+  }
+}
+
+// Performance monitoring class
+class PerformanceMonitor {
+  constructor() {
+    this.metrics = { frameDrops: 0, memoryPeaks: [], animationLatencies: [] };
+    this.isMonitoring = false;
+  }
+
+  startMonitoring() {
+    if (this.isMonitoring) return;
+    this.isMonitoring = true;
+    
+    this.monitorFrameRate();
+    this.monitorMemoryUsage();
+  }
+
+  monitorFrameRate() {
+    let frameCount = 0;
+    let lastTime = Date.now();
+    
+    const trackFrame = () => {
+      if (!this.isMonitoring) return;
+      
+      frameCount++;
+      const currentTime = Date.now();
+      
+      if (currentTime - lastTime >= 1000) {
+        const fps = frameCount;
+        if (fps < 30) {
+          this.metrics.frameDrops++;
+          console.warn(`🎬 Low FPS detected: ${fps.toFixed(2)}`);
+        }
+        frameCount = 0;
+        lastTime = currentTime;
+      }
+      
+      if (this.isMonitoring) {
+        setTimeout(trackFrame, 16); // ~60fps monitoring
+      }
+    };
+    
+    trackFrame();
+  }
+
+  monitorMemoryUsage() {
+    const interval = setInterval(() => {
+      if (!this.isMonitoring) {
+        clearInterval(interval);
+        return;
+      }
+      
+      const usage = process.memoryUsage();
+      if (usage.heapUsed > 200 * 1024 * 1024) { // 200MB threshold
+        console.warn('🧠 High memory usage detected:', this.formatBytes(usage.heapUsed));
+        this.optimizeMemory();
+      }
+    }, 5000);
+  }
+
+  optimizeMemory() {
+    if (global.gc) {
+      global.gc();
+      console.log('🧹 Garbage collection triggered');
+    }
+  }
+
+  formatBytes(bytes) {
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    if (bytes === 0) return '0 B';
+    const i = Math.floor(Math.log(bytes) / Math.log(1024));
+    return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
+  }
+
+  stop() {
+    this.isMonitoring = false;
   }
 }
 

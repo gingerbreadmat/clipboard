@@ -1,3 +1,5 @@
+/* Enhanced renderer/styles.css with smooth animations and flash prevention */
+
 :root {
     /* Light Theme (Default) */
     --bg-primary: rgba(255, 255, 255, 0.95);
@@ -30,6 +32,14 @@
     --input-bg: rgba(255, 255, 255, 0.9);
     --input-bg-focus: white;
     --input-border: rgba(0, 0, 0, 0.1);
+    
+    /* Animation timing constants based on guide */
+    --animation-duration-fast: 60ms;
+    --animation-duration-normal: 100ms;
+    --animation-duration-slow: 150ms;
+    --animation-easing-gentle: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    --animation-easing-snappy: cubic-bezier(0.55, 0.085, 0.68, 0.53);
+    --animation-easing-bouncy: cubic-bezier(0.68, -0.55, 0.265, 1.55);
 }
 
 /* Dark Theme */
@@ -64,10 +74,27 @@
     --input-border: rgba(255, 255, 255, 0.1);
 }
 
+/* ========================================
+   GLOBAL ANIMATION FOUNDATION
+   ======================================== */
+
 * {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
+}
+
+/* Hardware acceleration setup for smooth animations */
+html {
+    /* Force GPU layer creation */
+    transform: translateZ(0);
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+    
+    /* Optimize font rendering during animations */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeSpeed;
 }
 
 body {
@@ -79,14 +106,52 @@ body {
     overflow: hidden;
     margin: 0;
     padding: 0;
-    transition: background-color 0.3s ease, color 0.3s ease;
+    
+    /* Critical: Smooth transition setup */
+    transition: background-color var(--animation-duration-normal) var(--animation-easing-gentle),
+                color var(--animation-duration-normal) var(--animation-easing-gentle);
+    
+    /* Performance optimizations */
+    contain: layout style paint;
+    will-change: auto; /* Only set when animating */
+    
+    /* Prevent flicker during theme changes */
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
 }
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+    
+    body {
+        transition: none !important;
+    }
+}
+
+/* ========================================
+   APP LAYOUT
+   ======================================== */
 
 .app {
     height: 100vh;
     display: flex;
     flex-direction: column;
+    
+    /* Smooth layout container */
+    contain: layout style;
 }
+
+/* ========================================
+   HEADER WITH SMOOTH ANIMATIONS
+   ======================================== */
 
 .header {
     background: var(--bg-secondary);
@@ -94,12 +159,19 @@ body {
     padding: 12px 16px;
     backdrop-filter: blur(10px);
     flex-shrink: 0;
+    
+    /* Smooth transitions */
+    transition: background-color var(--animation-duration-normal) var(--animation-easing-gentle),
+                border-color var(--animation-duration-normal) var(--animation-easing-gentle);
 }
 
 .header-content {
     display: flex;
     align-items: center;
     gap: 12px;
+    
+    /* Hardware accelerated transforms */
+    transform: translateZ(0);
 }
 
 .search-container {
@@ -107,6 +179,9 @@ body {
     flex: 1;
     display: flex;
     align-items: center;
+    
+    /* Smooth container animations */
+    transform: translateZ(0);
 }
 
 #search-input {
@@ -117,18 +192,28 @@ body {
     font-size: 14px;
     background: var(--input-bg);
     color: var(--text-primary);
-    transition: all 0.2s ease;
     flex: 1;
+    
+    /* Smooth focus transitions */
+    transition: all var(--animation-duration-normal) var(--animation-easing-gentle);
+    
+    /* Performance optimization */
+    will-change: border-color, background-color, box-shadow;
 }
 
 #search-input:focus {
     outline: none;
     border-color: var(--primary-color);
     background: var(--input-bg-focus);
+    box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
+    
+    /* Smooth scaling effect */
+    transform: scale(1.01);
 }
 
 #search-input::placeholder {
     color: var(--text-tertiary);
+    transition: color var(--animation-duration-normal) var(--animation-easing-gentle);
 }
 
 .clear-btn {
@@ -147,12 +232,20 @@ body {
     align-items: center;
     justify-content: center;
     border-radius: 50%;
-    transition: all 0.2s ease;
+    
+    /* Smooth hover animations */
+    transition: all var(--animation-duration-fast) var(--animation-easing-gentle);
+    will-change: background-color, color, transform;
 }
 
 .clear-btn:hover {
     background: var(--shadow-light);
     color: var(--text-secondary);
+    transform: translateY(-50%) scale(1.1);
+}
+
+.clear-btn:active {
+    transform: translateY(-50%) scale(0.95);
 }
 
 .settings-btn {
@@ -161,23 +254,34 @@ body {
     border-radius: 8px;
     padding: 8px;
     cursor: pointer;
-    transition: all 0.2s ease;
     display: flex;
     align-items: center;
     justify-content: center;
     width: 44px;
     height: 44px;
     flex-shrink: 0;
+    
+    /* Smooth button animations */
+    transition: all var(--animation-duration-normal) var(--animation-easing-gentle);
+    will-change: background-color, transform;
 }
 
 .settings-btn:hover {
     background: var(--settings-bg-hover-color);
+    transform: scale(1.05);
+}
+
+.settings-btn:active {
+    transform: scale(0.95);
 }
 
 .settings-btn i {
     font-size: 18px;
     color: var(--settings-icon-color);
-    transition: all 0.2s ease;
+    
+    /* Smooth icon animations with rotation */
+    transition: all var(--animation-duration-normal) var(--animation-easing-gentle);
+    will-change: color, transform;
 }
 
 .settings-btn:hover i {
@@ -189,6 +293,10 @@ body {
     transform: rotate(180deg);
 }
 
+/* ========================================
+   STATS BAR
+   ======================================== */
+
 .stats-bar {
     padding: 8px 16px;
     background: var(--bg-quaternary);
@@ -197,256 +305,329 @@ body {
     color: var(--text-secondary);
     text-align: right;
     flex-shrink: 0;
+    
+    /* Smooth transitions */
+    transition: all var(--animation-duration-normal) var(--animation-easing-gentle);
 }
+
+/* ========================================
+   MAIN CONTENT AREA
+   ======================================== */
 
 .main {
     flex: 1;
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    
+    /* Performance container */
+    contain: layout style paint;
 }
 
-/* Context Menu */
-.context-menu {
-    position: fixed;
-    background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(20px);
-    border: 1px solid rgba(0, 0, 0, 0.1);
+/* ========================================
+   CLIPBOARD LIST WITH STAGGERED ANIMATIONS
+   ======================================== */
+
+.clipboard-list {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 12px;
+    display: grid;
+    gap: 12px;
+    align-content: start;
+    grid-template-columns: 1fr;
+    
+    /* Smooth scrolling */
+    scroll-behavior: smooth;
+    
+    /* Performance optimization */
+    contain: layout style;
+    
+    /* Initial state for fade-in */
+    opacity: 0;
+    transform: translateY(10px);
+    transition: opacity var(--animation-duration-normal) var(--animation-easing-gentle),
+                transform var(--animation-duration-normal) var(--animation-easing-gentle);
+}
+
+/* Animate clipboard list when visible */
+.clipboard-list.loaded {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+/* ========================================
+   CLIPBOARD ITEM ANIMATIONS
+   ======================================== */
+
+.clipboard-item {
+    width: 320px;
+    height: 200px;
+    min-width: 320px;
+    min-height: 200px;
+    max-width: 320px;
+    max-height: 200px;
+    
+    background: var(--item-bg);
+    border: 1px solid var(--item-border);
     border-radius: 8px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-    z-index: 1000;
-    min-width: 120px;
-    display: none;
-}
-
-.context-item {
-    padding: 12px 16px;
+    padding: 12px;
     cursor: pointer;
-    font-size: 14px;
-    transition: background 0.2s ease;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    
+    /* Hardware accelerated animations */
+    transform: translateZ(0);
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+    
+    /* Smooth transitions optimized for GPU */
+    transition: transform var(--animation-duration-normal) var(--animation-easing-gentle),
+                opacity var(--animation-duration-normal) var(--animation-easing-gentle),
+                box-shadow var(--animation-duration-normal) var(--animation-easing-gentle),
+                background-color var(--animation-duration-normal) var(--animation-easing-gentle),
+                border-color var(--animation-duration-normal) var(--animation-easing-gentle);
+    
+    /* Performance hints */
+    will-change: transform, opacity, box-shadow;
+    
+    /* Staggered entrance animation */
+    opacity: 0;
+    transform: translate3d(0, 20px, 0) scale(0.95);
 }
 
-.context-item:hover {
-    background: rgba(0, 0, 0, 0.05);
+/* Animate items when they appear */
+.clipboard-item.animate-in {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
 }
 
-.context-item:first-child {
-    border-radius: 8px 8px 0 0;
+/* Staggered animation delays */
+.clipboard-item:nth-child(1) { animation-delay: 0ms; }
+.clipboard-item:nth-child(2) { animation-delay: 50ms; }
+.clipboard-item:nth-child(3) { animation-delay: 100ms; }
+.clipboard-item:nth-child(4) { animation-delay: 150ms; }
+.clipboard-item:nth-child(5) { animation-delay: 200ms; }
+.clipboard-item:nth-child(n+6) { animation-delay: 250ms; }
+
+.clipboard-item:hover {
+    background: var(--item-bg-hover);
+    border-color: var(--item-border-hover);
+    transform: translate3d(0, -4px, 0) scale(1.02);
+    box-shadow: 0 12px 30px var(--shadow-medium);
 }
 
-.context-item:last-child {
-    border-radius: 0 0 8px 8px;
+.clipboard-item:active {
+    transform: translate3d(0, -2px, 0) scale(0.98);
 }
 
-/* Animations */
-@keyframes fadeIn {
-    from {
-        opacity: 0;
-        transform: translateY(10px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
+.clipboard-item.pinned {
+    border-color: var(--primary-color);
+    background: rgba(0, 122, 255, 0.05);
 }
 
-/* COMPLETE LOCKDOWN for initial load - NO MOVEMENT WHATSOEVER */
-.no-animations {
-    overflow: hidden !important;
+.clipboard-item.pinned::before {
+    content: '📌';
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    font-size: 12px;
+    z-index: 1;
+    
+    /* Pin animation */
+    animation: pinBounce 0.5s var(--animation-easing-bouncy);
 }
 
-.no-animations *,
-.no-animations *::before,
-.no-animations *::after {
-    transition: none !important;
-    animation: none !important;
-    transform: translateY(0) !important; /* FORCE final position */
-    opacity: 1 !important; /* FORCE visible */
-    will-change: auto !important;
-}
-
-.no-animations .clipboard-item {
-    /* FORCE cards to start in final position */
-    animation: none !important;
-    transform: translateY(0) !important; /* NO bottom-up movement */
-    transition: none !important;
-    opacity: 1 !important;
-    position: relative !important;
-    min-height: 250px !important;
-    max-height: 250px !important;
-    height: 250px !important;
-}
-
-.no-animations .clear-btn {
-    /* FORCE search X button to be in place */
-    transform: translateY(-50%) !important; /* Keep centered but no other movement */
-    transition: none !important;
-    opacity: 1 !important;
-    animation: none !important;
-}
-
-.no-animations .clipboard-list {
-    animation: none !important;
-    display: grid !important;
-    gap: 12px !important;
-}
-
-.no-animations .item-content {
-    display: block !important;
-    overflow: hidden !important;
-    height: auto !important;
-    flex: 1 !important;
-    word-wrap: break-word !important;
-    white-space: pre-wrap !important;
-    transform: none !important;
-}
-
-.no-animations .image-preview,
-.no-animations .files-preview {
-    opacity: 1 !important;
-    transform: none !important;
-    min-height: 50px !important;
-}
-
-.no-animations .thumbnail {
-    transform: none !important;
-    transition: none !important;
-    display: block !important;
-}
-
-.no-animations .item-header,
-.no-animations .item-size {
-    transform: none !important;
-    opacity: 1 !important;
-    flex-shrink: 0 !important;
-    height: auto !important;
+@keyframes pinBounce {
+    0% { transform: scale(0) rotate(0deg); }
+    50% { transform: scale(1.3) rotate(180deg); }
+    100% { transform: scale(1) rotate(360deg); }
 }
 
 /* ========================================
-   HORIZONTAL MODE SPECIFIC STYLES
+   ITEM CONTENT ANIMATIONS
    ======================================== */
 
-/* Header modifications for horizontal mode */
-.horizontal-mode .header {
-    padding: 8px 16px; /* Reduced padding */
-}
-
-/* Horizontal header layout */
-.horizontal-header {
+.item-header {
     display: flex;
+    justify-content: space-between;
     align-items: center;
-    justify-content: center;
-    gap: 16px;
-    position: relative;
+    margin-bottom: 12px;
+    flex-shrink: 0;
+    height: 24px;
+    
+    /* Smooth header animations */
+    transform: translateZ(0);
 }
 
-/* Centered, smaller search container */
-.horizontal-header .search-container {
-    flex: 0 1 400px; /* Fixed max width */
-    max-width: 400px;
-    min-width: 300px;
-    order: 1; /* Ensure it's in the center */
-}
-
-/* Header stats styling (positioned next to settings) */
-.header-stats {
-    position: absolute;
-    right: 60px; /* Next to settings button */
-    top: 50%;
-    transform: translateY(-50%);
-    font-size: 12px;
+.item-type {
+    font-size: 11px;
     color: var(--text-secondary);
-    font-weight: 500;
-    background: var(--bg-quaternary);
+    text-transform: uppercase;
+    font-weight: 700;
+    letter-spacing: 0.8px;
     padding: 4px 8px;
-    border-radius: 4px;
-    border: 1px solid var(--border-light);
-    backdrop-filter: blur(10px);
+    background: var(--shadow-light);
+    border-radius: 6px;
+    flex-shrink: 0;
+    
+    /* Type badge animation */
+    transition: all var(--animation-duration-fast) var(--animation-easing-gentle);
+    transform: translateZ(0);
 }
 
-/* Settings button positioning in horizontal mode */
-.horizontal-header .settings-btn {
-    position: absolute;
-    right: 8px;
-    top: 50%;
-    transform: translateY(-50%);
-    order: 3;
+.clipboard-item:hover .item-type {
+    background: var(--primary-color);
+    color: white;
+    transform: scale(1.05);
 }
 
-/* Hide stats bar in horizontal mode */
-.horizontal-mode .stats-bar {
+.item-time {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    font-weight: 500;
+    flex-shrink: 0;
+    
+    /* Time fade animation */
+    transition: color var(--animation-duration-normal) var(--animation-easing-gentle);
+}
+
+.item-content {
+    flex: 1;
+    font-size: 14px;
+    line-height: 1.4;
+    color: var(--text-primary);
+    word-wrap: break-word;
+    white-space: pre-wrap;
+    overflow: hidden;
+    margin-bottom: 12px;
+    display: block;
+    
+    /* Content animation setup */
+    transform: translateZ(0);
+    transition: color var(--animation-duration-normal) var(--animation-easing-gentle);
+}
+
+/* ========================================
+   IMAGE CONTENT ANIMATIONS
+   ======================================== */
+
+.item-content.image {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    overflow: hidden;
+}
+
+.image-preview {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
+
+.thumbnail {
+    max-width: 100%;
+    max-height: 160px;
+    border-radius: 6px;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    object-fit: cover;
+    background: #f5f5f5;
+    flex-shrink: 0;
+    
+    /* Smooth image animations */
+    transition: all var(--animation-duration-normal) var(--animation-easing-gentle);
+    transform: translateZ(0);
+    will-change: transform;
+}
+
+.thumbnail:hover {
+    transform: scale(1.05) translateZ(0);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+}
+
+.thumbnail.error {
     display: none;
 }
 
-/* Adjust main area height for horizontal mode */
-.horizontal-mode .main {
-    height: calc(100vh - 56px); /* Smaller header height */
-}
-
-/* ========================================
-   RESPONSIVE ADJUSTMENTS FOR HORIZONTAL MODE
-   ======================================== */
-
-/* For very wide screens, make search even smaller */
-@media (min-width: 1400px) {
-    .horizontal-header .search-container {
-        max-width: 350px;
-    }
-    
-    .header-stats {
-        right: 70px; /* Adjust positioning */
-    }
-}
-
-/* For smaller horizontal screens */
-@media (max-width: 900px) {
-    .horizontal-header .search-container {
-        min-width: 250px;
-        max-width: 300px;
-    }
-    
-    .header-stats {
-        right: 55px;
-        font-size: 11px;
-    }
-}
-
-/* ========================================
-   DARK THEME ADJUSTMENTS FOR HORIZONTAL MODE
-   ======================================== */
-
-[data-theme="dark"] .header-stats {
-    background: var(--bg-tertiary);
-    border-color: var(--border-medium);
+.image-info {
     color: var(--text-secondary);
-}
-
-/* ========================================
-   ANIMATION OVERRIDES FOR HORIZONTAL MODE
-   ======================================== */
-
-/* Ensure no unwanted animations in horizontal mode */
-.horizontal-mode.no-animations .clipboard-item {
-    height: var(--card-height) !important;
-    min-height: var(--card-height) !important;
-    max-height: var(--card-height) !important;
-}
-
-/* Override clear button positioning in horizontal mode */
-.horizontal-mode.no-animations .clear-btn {
-    transform: translateY(-50%) !important; /* Keep centered but no other movement */
-}
-
-/* ========================================
-   HEADER CENTERING FALLBACK
-   ======================================== */
-
-/* Alternative centering approach if flexbox doesn't work as expected */
-.horizontal-header {
+    font-size: 12px;
     text-align: center;
+    font-weight: 500;
+    flex-shrink: 0;
+    
+    /* Info fade animation */
+    transition: color var(--animation-duration-normal) var(--animation-easing-gentle);
 }
 
-.horizontal-header .search-container {
-    display: inline-block;
-    text-align: left;
+/* ========================================
+   FILE CONTENT ANIMATIONS
+   ======================================== */
+
+.files-preview {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 4px 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    
+    /* File preview container animation */
+    transform: translateZ(0);
 }
+
+.file-icon {
+    font-size: 28px;
+    flex-shrink: 0;
+    min-width: 35px;
+    text-align: center;
+    line-height: 1;
+    
+    /* Icon bounce animation */
+    transition: transform var(--animation-duration-fast) var(--animation-easing-gentle);
+    will-change: transform;
+}
+
+.clipboard-item:hover .file-icon {
+    transform: scale(1.1) rotate(5deg);
+}
+
+.file-info {
+    color: var(--text-primary);
+    font-size: 13px;
+    line-height: 1.4;
+    font-weight: 500;
+    flex: 1;
+    overflow: hidden;
+    word-wrap: break-word;
+    
+    /* File info animation */
+    transition: color var(--animation-duration-normal) var(--animation-easing-gentle);
+}
+
+/* ========================================
+   FOOTER ANIMATIONS
+   ======================================== */
+
+.item-size {
+    font-size: 10px;
+    color: var(--text-tertiary);
+    text-align: right;
+    flex-shrink: 0;
+    font-weight: 600;
+    height: 12px;
+    
+    /* Size animation */
+    transition: color var(--animation-duration-normal) var(--animation-easing-gentle);
+}
+
+/* ========================================

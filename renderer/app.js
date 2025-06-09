@@ -1,10 +1,9 @@
-// renderer/app.js
+// Enhanced renderer/app.js with fixed animations and proper loading states
 const { ipcRenderer } = require('electron');
 
 // File type detection class
 class SimpleFileDetector {
   constructor() {
-    // File type mappings - focused on visual recognition
     this.fileTypes = {
       // Images - these should get system thumbnails
       'jpg': { icon: '📸', color: '#FF6B6B', name: 'Photo', canThumbnail: true },
@@ -71,21 +70,15 @@ class SimpleFileDetector {
     };
   }
 
-  // Detect if text content is a file path
   detectFileFromText(text) {
     if (!text || typeof text !== 'string') return null;
     
     const cleanText = text.trim();
     
-    // Look for file extensions in various formats
     const patterns = [
-      // Standard file paths: /path/to/file.ext
       /([^\/\\]*\.)([a-zA-Z0-9]+)(?:\s|$|"|')/,
-      // Just filename: filename.ext
       /^([^\/\\]*\.)([a-zA-Z0-9]+)$/,
-      // With quotes: "filename.ext"
       /"([^"]*\.)([a-zA-Z0-9]+)"/,
-      // With spaces: file name.ext
       /([a-zA-Z0-9\s_-]*\.)([a-zA-Z0-9]+)(?:\s|$)/
     ];
     
@@ -111,7 +104,6 @@ class SimpleFileDetector {
     return null;
   }
 
-  // Get file info by extension
   getFileInfo(extension) {
     if (!extension) return null;
     return this.fileTypes[extension.toLowerCase()] || null;
@@ -125,6 +117,7 @@ class ClipboardManagerUI {
         this.selectedItemId = null;
         this.isInitialLoad = true;
         this.horizontalScrollEnabled = true;
+        this.isAnimating = false;
         
         // Initialize file detector
         this.fileDetector = new SimpleFileDetector();
@@ -142,10 +135,8 @@ class ClipboardManagerUI {
             this.detectAndApplyLayout();
         });
         
-        // Add horizontal scroll handler
         this.setupHorizontalScrolling();
         
-        // Load clipboard history immediately when UI starts
         console.log('UI: Constructor - loading clipboard history immediately');
         this.loadClipboardHistory();
     }
@@ -166,7 +157,6 @@ class ClipboardManagerUI {
                 e.preventDefault();
                 const scrollAmount = e.deltaY;
                 this.clipboardList.scrollLeft += scrollAmount;
-                console.log('Horizontal scroll applied:', scrollAmount);
             }
         }, { passive: false });
     }
@@ -339,15 +329,8 @@ class ClipboardManagerUI {
 
         // IPC events
         ipcRenderer.on('window-shown', () => {
-            this.isInitialLoad = true;
-            
-            if (this.clipboardList) {
-                this.clipboardList.style.visibility = 'hidden';
-            }
-            
-            this.detectAndApplyLayout();
-            this.loadClipboardHistory();
-            this.searchInput.focus();
+            console.log('📱 Window shown event received');
+            this.handleWindowShown();
         });
 
         ipcRenderer.on('history-cleared', () => {
@@ -368,6 +351,63 @@ class ClipboardManagerUI {
             console.log('UI: Horizontal scroll setting changed to:', enabled);
             this.horizontalScrollEnabled = enabled;
         });
+    }
+
+    handleWindowShown() {
+        console.log('🎬 Handling window shown with animation control');
+        
+        this.isInitialLoad = true;
+        this.isAnimating = true;
+        
+        // CRITICAL: Add no-animations class immediately to prevent bobbing
+        document.body.classList.add('no-animations');
+        
+        // Hide clipboard list initially
+        if (this.clipboardList) {
+            this.clipboardList.style.visibility = 'hidden';
+            this.clipboardList.style.opacity = '0';
+        }
+        
+        // Detect layout and load data
+        this.detectAndApplyLayout();
+        this.loadClipboardHistory();
+        this.searchInput.focus();
+        
+        // After a short delay, enable smooth animations
+        setTimeout(() => {
+            this.enableSmoothAnimations();
+        }, 100);
+    }
+
+    enableSmoothAnimations() {
+        console.log('🎬 Enabling smooth animations');
+        
+        if (this.clipboardList && this.isInitialLoad) {
+            // Remove no-animations class
+            document.body.classList.remove('no-animations');
+            
+            // Force layout recalculation
+            this.clipboardList.offsetHeight;
+            this.clipboardList.offsetWidth;
+            
+            // Show with smooth animation
+            requestAnimationFrame(() => {
+                this.clipboardList.style.visibility = 'visible';
+                this.clipboardList.style.opacity = '1';
+                this.clipboardList.classList.add('loaded');
+                
+                // Add animate-in class to all items with staggered delay
+                const items = this.clipboardList.querySelectorAll('.clipboard-item');
+                items.forEach((item, index) => {
+                    setTimeout(() => {
+                        item.classList.add('animate-in');
+                    }, index * 50); // 50ms stagger
+                });
+                
+                this.isInitialLoad = false;
+                this.isAnimating = false;
+            });
+        }
     }
 
     async loadClipboardHistory() {
@@ -404,7 +444,11 @@ class ClipboardManagerUI {
             console.log('No items, showing empty state');
             this.clipboardList.innerHTML = '';
             this.clipboardList.appendChild(this.emptyState);
-            this.clipboardList.style.visibility = 'visible';
+            
+            if (!this.isInitialLoad) {
+                this.clipboardList.style.visibility = 'visible';
+                this.clipboardList.style.opacity = '1';
+            }
             return;
         }
 
@@ -424,25 +468,24 @@ class ClipboardManagerUI {
         
         this.detectAndApplyLayout();
         
+        // Handle visibility based on loading state
         if (this.isInitialLoad) {
-            this.clipboardList.offsetHeight;
-            this.clipboardList.offsetWidth;
+            // During initial load, keep hidden until enableSmoothAnimations is called
+            this.clipboardList.style.visibility = 'hidden';
+            this.clipboardList.style.opacity = '0';
             
+            // Force layout calculation to prevent future layout shifts
             const items = this.clipboardList.querySelectorAll('.clipboard-item');
             items.forEach(item => {
                 item.offsetHeight;
                 item.offsetWidth;
                 item.getBoundingClientRect();
             });
-            
-            requestAnimationFrame(() => {
-                requestAnimationFrame(() => {
-                    this.clipboardList.style.visibility = 'visible';
-                    this.isInitialLoad = false;
-                });
-            });
         } else {
+            // For subsequent renders, show immediately with smooth transition
             this.clipboardList.style.visibility = 'visible';
+            this.clipboardList.style.opacity = '1';
+            this.clipboardList.classList.add('loaded');
         }
     }
 
@@ -571,6 +614,7 @@ class ClipboardManagerUI {
         this.contextMenu.style.left = `${x}px`;
         this.contextMenu.style.top = `${y}px`;
         this.contextMenu.style.display = 'block';
+        this.contextMenu.classList.add('show');
 
         const selectedItem = this.clipboardItems.find(item => item.id === this.selectedItemId);
         const pinItem = this.contextMenu.querySelector('[data-action="pin"]');
@@ -580,7 +624,10 @@ class ClipboardManagerUI {
     }
 
     hideContextMenu() {
-        this.contextMenu.style.display = 'none';
+        this.contextMenu.classList.remove('show');
+        setTimeout(() => {
+            this.contextMenu.style.display = 'none';
+        }, 150);
         this.selectedItemId = null;
     }
 
@@ -632,7 +679,7 @@ class ClipboardManagerUI {
             fontWeight: '500',
             boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
             transform: 'translateX(100%)',
-            transition: 'transform 0.3s ease'
+            transition: 'transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)'
         });
 
         document.body.appendChild(toast);
@@ -644,7 +691,9 @@ class ClipboardManagerUI {
         setTimeout(() => {
             toast.style.transform = 'translateX(100%)';
             setTimeout(() => {
-                document.body.removeChild(toast);
+                if (document.body.contains(toast)) {
+                    document.body.removeChild(toast);
+                }
             }, 300);
         }, 2000);
     }
@@ -652,5 +701,6 @@ class ClipboardManagerUI {
 
 // Initialize the app when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
+    console.log('🎬 DOM loaded, initializing clipboard manager UI');
     new ClipboardManagerUI();
 });
