@@ -34,12 +34,16 @@
     --input-border: rgba(0, 0, 0, 0.1);
     
     /* Animation timing constants based on guide */
-    --animation-duration-fast: 60ms;
+    /* --animation-duration-fast: 60ms;
     --animation-duration-normal: 100ms;
     --animation-duration-slow: 150ms;
     --animation-easing-gentle: cubic-bezier(0.25, 0.46, 0.45, 0.94);
     --animation-easing-snappy: cubic-bezier(0.55, 0.085, 0.68, 0.53);
-    --animation-easing-bouncy: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    --animation-easing-bouncy: cubic-bezier(0.68, -0.55, 0.265, 1.55); */
+}
+*, *::before, *::after {
+    animation-duration: 0s !important;
+    transition-duration: 0s !important;
 }
 
 /* Dark Theme */
