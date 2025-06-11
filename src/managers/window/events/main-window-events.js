@@ -1,466 +1,380 @@
-class MainWindowEvents {
-  constructor(settingsService, dockService) {
+const { BrowserWindow, screen } = require('electron');
+
+/**
+ * MainWindowFactory - Creates and configures main clipboard windows
+ * Handles positioning, theming, and platform-specific configurations
+ */
+class MainWindowFactory {
+  constructor(settingsService, positionCalculator) {
     this.settingsService = settingsService;
-    this.dockService = dockService;
-    this.windowManager = null;
-    console.log('📱 Main Window Events initialized');
+    this.positionCalculator = positionCalculator;
+    console.log('📱 MainWindowFactory initialized');
   }
 
   /**
-   * Setup all event handlers for main window
+   * Creates a new main window with cursor-aware positioning
+   * @param {Object} options - Additional window options
+   * @returns {BrowserWindow} The created main window
    */
-  setupEventHandlers(window, windowManager) {
-    this.window = window;
-    this.windowManager = windowManager;
+  async createWindow(options = {}) {
+    console.log('📱 Creating main window...');
     
-    this.setupReadyToShowHandler();
-    this.setupCloseHandler();
-    this.setupShowHandler();
-    this.setupBlurHandler();
-    this.setupWebContentsHandlers();
+    // Get cursor position and target display
+    const cursorPosition = screen.getCursorScreenPoint();
+    const targetDisplay = this.getDisplayAtCursor(cursorPosition);
     
-    console.log('✅ Main window event handlers setup complete');
+    console.log(`🖱️ Cursor at: ${cursorPosition.x}, ${cursorPosition.y}`);
+    console.log(`📺 Target display: ${targetDisplay.id} (${targetDisplay.bounds.width}x${targetDisplay.bounds.height})`);
+    
+    // Get stored position preference and theme
+    const storedPosition = this.settingsService.getWindowPosition();
+    const currentTheme = this.settingsService.getTheme();
+    
+    console.log('📍 Using stored position:', storedPosition);
+    console.log('🎨 Using theme:', currentTheme);
+    
+    // Calculate window bounds
+    const initialBounds = await this.calculateWindowBounds(storedPosition, targetDisplay, cursorPosition);
+    
+    if (!initialBounds) {
+      throw new Error('Failed to calculate valid window bounds');
+    }
+
+    // Create window configuration
+    const windowConfig = this.createWindowConfiguration(storedPosition, currentTheme, initialBounds, options);
+    
+    // Create the window
+    const mainWindow = new BrowserWindow(windowConfig);
+
+    // Set up event handlers
+    this.setupMainWindowEventHandlers(mainWindow, storedPosition);
+
+    // Load the main HTML file
+    await mainWindow.loadFile('renderer/index.html');
+
+    return mainWindow;
   }
 
   /**
-   * Handle ready-to-show event
+   * Creates the window configuration object
+   * @param {string} position - Window position mode
+   * @param {string} theme - Current theme
+   * @param {Object} bounds - Window bounds
+   * @param {Object} additionalOptions - Additional options
+   * @returns {Object} Complete window configuration
    */
-  setupReadyToShowHandler() {
-    this.window.once('ready-to-show', () => {
-      console.log('✅ Main window ready to show');
-      
-      const currentPosition = this.settingsService.getWindowPosition();
-      console.log('🔧 Ready-to-show: Applying position logic for:', currentPosition);
-      
-      // Set up space management for macOS
-      if (process.platform === 'darwin') {
-        try {
-          this.window.setVisibleOnAllWorkspaces(false);
-          
-          // Set collection behavior for proper space handling
-          this.window.setCollectionBehavior([
-            'moveToActiveSpace',
-            'managed',
-            'participatesInCycle'
-          ]);
-          
-          console.log('✅ Space management configured');
-        } catch (error) {
-          console.error('❌ Error configuring space management:', error);
-        }
-      }
-      
-      // Set correct window level based on position
-      this.applyWindowLevelForPosition(currentPosition);
-      
-      // Force hide traffic light buttons
-      this.hideTrafficLightButtons();
+  createWindowConfiguration(position, theme, bounds, additionalOptions = {}) {
+    const backgroundColor = theme === 'dark' ? '#282828' : '#ffffff';
+    
+    // Base configuration
+    const baseConfig = {
+      ...bounds,
+      show: false, // Prevent flash
+      resizable: position === 'window',
+      movable: position === 'window',
+      minimizable: position === 'window',
+      maximizable: position === 'window',
+      fullscreenable: false,
+      closable: false,
+      webPreferences: {
+        nodeIntegration: true,
+        contextIsolation: false,
+        paintWhenInitiallyHidden: false,
+        backgroundThrottling: false
+      },
+      frame: false,
+      transparent: false,
+      backgroundColor: backgroundColor,
+      alwaysOnTop: true,
+      skipTaskbar: true,
+      level: 'screen-saver',
+      visibleOnAllWorkspaces: false,
+      focusable: true
+    };
+
+    // Add platform-specific options
+    if (process.platform === 'darwin') {
+      baseConfig.vibrancy = 'sidebar';
+      baseConfig.titleBarStyle = 'hidden';
+      baseConfig.trafficLightPosition = { x: -100, y: -100 }; // Hide traffic lights
+    }
+
+    // Merge with additional options
+    return { ...baseConfig, ...additionalOptions };
+  }
+
+  /**
+   * Calculates window bounds based on position mode and cursor location
+   * @param {string} position - Position mode
+   * @param {Object} display - Target display
+   * @param {Object} cursorPosition - Current cursor position
+   * @returns {Object|null} Window bounds or null if calculation fails
+   */
+  async calculateWindowBounds(position, display, cursorPosition) {
+    if (!this.positionCalculator) {
+      console.error('❌ Position calculator not available');
+      return this.getFallbackBounds(display);
+    }
+
+    try {
+      return await this.positionCalculator.calculateBounds(position, display, cursorPosition);
+    } catch (error) {
+      console.error('❌ Error calculating bounds:', error);
+      return this.getFallbackBounds(display);
+    }
+  }
+
+  /**
+   * Gets fallback bounds if calculation fails
+   * @param {Object} display - Target display
+   * @returns {Object} Fallback window bounds
+   */
+  getFallbackBounds(display) {
+    const { x: screenX, y: screenY, width: screenWidth, height: screenHeight } = display.bounds;
+    
+    return {
+      x: Math.round(screenX + (screenWidth - 400) / 2),
+      y: Math.round(screenY + (screenHeight - 600) / 2),
+      width: 400,
+      height: 600
+    };
+  }
+
+  /**
+   * Gets the display at the current cursor position
+   * @param {Object} cursorPosition - Cursor coordinates
+   * @returns {Object} Display object
+   */
+  getDisplayAtCursor(cursorPosition) {
+    const displays = screen.getAllDisplays();
+    
+    const targetDisplay = displays.find(display => {
+      const { x, y, width, height } = display.bounds;
+      return cursorPosition.x >= x && 
+             cursorPosition.x < x + width && 
+             cursorPosition.y >= y && 
+             cursorPosition.y < y + height;
     });
+    
+    return targetDisplay || screen.getPrimaryDisplay();
   }
 
   /**
-   * Handle window close event
+   * Sets up event handlers for the main window
+   * @param {BrowserWindow} mainWindow - The main window
+   * @param {string} position - Window position mode
    */
-  setupCloseHandler() {
-    this.window.on('close', (event) => {
+  setupMainWindowEventHandlers(mainWindow, position) {
+    // Ready to show event
+    mainWindow.once('ready-to-show', () => {
+      console.log('✅ Main window ready');
+      this.configureWindowBehavior(mainWindow, position);
+      this.hideTrafficLightButtons(mainWindow);
+    });
+
+    // Close event - hide instead of close
+    mainWindow.on('close', (event) => {
       const { app } = require('electron');
       if (!app.isQuiting) {
         event.preventDefault();
-        this.window.hide();
+        mainWindow.hide();
         console.log('🙈 Main window hidden');
       } else {
         console.log('💀 Main window closing - app is quitting');
       }
     });
-  }
 
-  /**
-   * Handle window show event
-   */
-  setupShowHandler() {
-    this.window.on('show', () => {
+    // Show event
+    mainWindow.on('show', () => {
       console.log('👁️ Main window shown');
-      
-      // Ensure proper space behavior when shown
-      if (process.platform === 'darwin') {
-        this.window.setVisibleOnAllWorkspaces(false);
-        this.window.moveTop();
-        
-        // Reapply collection behavior to ensure it sticks
-        try {
-          this.window.setCollectionBehavior([
-            'moveToActiveSpace',
-            'managed', 
-            'participatesInCycle'
-          ]);
-        } catch (error) {
-          console.error('❌ Error reapplying collection behavior:', error);
-        }
-      }
-      
-      // Send events to renderer
-      this.window.webContents.send('window-shown');
-      
-      // Apply current theme when window is shown
-      const currentTheme = this.settingsService.getTheme();
-      this.window.webContents.send('theme-changed', currentTheme);
-      
-      // Ensure correct window level based on position
-      this.ensureCorrectWindowLevel();
+      this.onWindowShow(mainWindow);
     });
-  }
 
-  /**
-   * Handle window blur event
-   */
-  setupBlurHandler() {
-    this.window.on('blur', () => {
-      // Add a small delay to prevent hiding during window repositioning
+    // Blur event - hide when focus is lost
+    mainWindow.on('blur', () => {
       setTimeout(() => {
-        // Only hide if the window is still unfocused after the delay
-        if (this.window && !this.window.isDestroyed() && !this.window.isFocused()) {
+        if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isFocused()) {
           console.log('😴 Main window lost focus, hiding...');
-          this.window.hide();
+          mainWindow.hide();
         }
       }, 100);
     });
-  }
 
-  /**
-   * Setup web contents event handlers
-   */
-  setupWebContentsHandlers() {
-    this.window.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+    // Error handling
+    mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
       console.error('❌ Main window failed to load:', errorCode, errorDescription);
     });
 
-    this.window.webContents.on('did-finish-load', () => {
+    mainWindow.webContents.on('did-finish-load', () => {
       console.log('✅ Main window finished loading');
     });
-
-    this.window.webContents.on('dom-ready', () => {
-      console.log('✅ Main window DOM ready');
-    });
   }
 
   /**
-   * Apply window level for specific position
+   * Configures window behavior based on position
+   * @param {BrowserWindow} mainWindow - The main window
+   * @param {string} position - Window position mode
    */
-  applyWindowLevelForPosition(position) {
-    if (position === 'bottom') {
-      console.log('🔧 Ready-to-show: Using elevated window level for bottom position');
-      this.window.setAlwaysOnTop(true, 'pop-up-menu');
-    } else {
-      console.log('🔧 Ready-to-show: Using standard window level');
-      this.window.setAlwaysOnTop(true, 'screen-saver');
-    }
-  }
-
-  /**
-   * Ensure correct window level is maintained
-   */
-  ensureCorrectWindowLevel() {
-    const currentPosition = this.settingsService.getWindowPosition();
-    if (currentPosition === 'bottom') {
-      console.log('🔧 Reapplying bottom position window level');
-      this.window.setAlwaysOnTop(true, 'pop-up-menu');
-      
-      // Reapply bounds for bottom position on current display
-      if (this.windowManager && this.windowManager.currentDisplay) {
-        const { x: screenX, y: screenY, width: screenWidth, height: screenHeight } = this.windowManager.currentDisplay.bounds;
-        const bottomBarHeight = 300;
+  configureWindowBehavior(mainWindow, position) {
+    if (process.platform === 'darwin') {
+      try {
+        mainWindow.setVisibleOnAllWorkspaces(false);
         
-        this.window.setBounds({
-          x: screenX,
-          y: screenY + screenHeight - bottomBarHeight,
-          width: screenWidth,
-          height: bottomBarHeight
-        });
+        if (typeof mainWindow.setCollectionBehavior === 'function') {
+          mainWindow.setCollectionBehavior([
+            'moveToActiveSpace',
+            'managed',
+            'participatesInCycle'
+          ]);
+        }
+        
+        console.log('✅ macOS window behavior configured');
+      } catch (error) {
+        console.error('❌ Error configuring window behavior:', error);
       }
+    }
+
+    // Set appropriate window level based on position
+    if (position === 'bottom') {
+      // Bottom positioning may need special handling for dock
+      this.configureBottomPosition(mainWindow);
     } else {
-      this.window.setAlwaysOnTop(true, 'screen-saver');
+      mainWindow.setAlwaysOnTop(true, 'screen-saver');
     }
   }
 
   /**
-   * Hide traffic light buttons on macOS
+   * Configures bottom positioning (may need dock management)
+   * @param {BrowserWindow} mainWindow - The main window
    */
-  hideTrafficLightButtons() {
+  configureBottomPosition(mainWindow) {
+    console.log('🔧 Configuring bottom position');
+    
+    // Try native positioning first if available
+    if (this.hasNativeWindowManager()) {
+      setTimeout(() => {
+        this.applyNativeBottomPosition(mainWindow);
+      }, 100);
+    } else {
+      // Fallback to high window level
+      mainWindow.setAlwaysOnTop(true, 'pop-up-menu');
+    }
+  }
+
+  /**
+   * Checks if native window manager is available
+   * @returns {boolean} True if native manager is available
+   */
+  hasNativeWindowManager() {
     try {
-      if (process.platform === 'darwin') {
-        this.window.setWindowButtonVisibility(false);
-        console.log('✅ Traffic light buttons hidden');
+      const nativeManager = require('../../../build/Release/macos_window_manager.node');
+      return !!nativeManager;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  /**
+   * Applies native bottom positioning
+   * @param {BrowserWindow} mainWindow - The main window
+   */
+  applyNativeBottomPosition(mainWindow) {
+    try {
+      const nativeManager = require('../../../build/Release/macos_window_manager.node');
+      const bounds = mainWindow.getBounds();
+      const windowId = mainWindow.getNativeWindowHandle().readInt32LE(0);
+      
+      const success = nativeManager.forceWindowOverDock(
+        windowId, bounds.x, bounds.y, bounds.width, bounds.height
+      );
+      
+      if (success) {
+        console.log('✅ Native bottom positioning applied');
+      } else {
+        console.log('❌ Native positioning failed, using fallback');
+        mainWindow.setAlwaysOnTop(true, 'pop-up-menu');
       }
     } catch (error) {
-      console.log('⚠️ Could not hide window buttons:', error.message);
+      console.error('❌ Error with native positioning:', error);
+      mainWindow.setAlwaysOnTop(true, 'pop-up-menu');
     }
   }
 
   /**
-   * Handle theme changes
+   * Handles window show event
+   * @param {BrowserWindow} mainWindow - The main window
    */
-  onThemeChanged(newTheme) {
-    if (this.window && this.window.webContents) {
-      this.window.webContents.send('theme-changed', newTheme);
-      console.log('🎨 Theme change sent to main window:', newTheme);
-    }
-  }
-
-  /**
-   * Handle position changes
-   */
-  onPositionChanged(newPosition) {
-    this.applyWindowLevelForPosition(newPosition);
-    this.ensureCorrectWindowLevel();
-    console.log('📍 Position change applied to main window:', newPosition);
-  }
-
-  /**
-   * Handle display changes
-   */
-  onDisplayChanged(changeData) {
-    console.log('📺 Display change detected in main window:', changeData.type);
-    
-    if (this.window && this.window.webContents) {
-      this.window.webContents.send('display-changed', changeData);
+  onWindowShow(mainWindow) {
+    if (process.platform === 'darwin') {
+      mainWindow.moveTop();
     }
     
-    // If displays were added/removed, might need to reposition
-    if (changeData.type === 'added' || changeData.type === 'removed') {
-      console.log('📺 Display configuration changed, may need repositioning');
-      // Could trigger repositioning logic through window manager
+    // Send events to renderer
+    mainWindow.webContents.send('window-shown');
+    
+    // Apply current theme
+    if (this.settingsService) {
+      const currentTheme = this.settingsService.getTheme();
+      mainWindow.webContents.send('theme-changed', currentTheme);
     }
   }
 
   /**
-   * Handle horizontal scroll setting changes
+   * Hides traffic light buttons on macOS
+   * @param {BrowserWindow} mainWindow - The main window
    */
-  onHorizontalScrollChanged(enabled) {
-    if (this.window && this.window.webContents) {
-      this.window.webContents.send('horizontal-scroll-changed', enabled);
-      console.log('🖱️ Horizontal scroll change sent to main window:', enabled);
-    }
-  }
-
-  /**
-   * Handle clipboard item added
-   */
-  onClipboardItemAdded(item) {
-    if (this.window && this.window.webContents) {
-      this.window.webContents.send('clipboard-item-added', item);
-      console.log('📋 Clipboard item added event sent to main window');
-    }
-  }
-
-  /**
-   * Handle history cleared
-   */
-  onHistoryCleared() {
-    if (this.window && this.window.webContents) {
-      this.window.webContents.send('history-cleared');
-      console.log('🧹 History cleared event sent to main window');
-    }
-  }
-
-  /**
-   * Handle copy item from tray
-   */
-  onCopyItemFromTray(item) {
-    if (this.window && this.window.webContents) {
-      this.window.webContents.send('copy-item-from-tray', item);
-      console.log('📋 Copy item from tray event sent to main window');
-    }
-  }
-
-  /**
-   * Setup keyboard event handlers
-   */
-  setupKeyboardHandlers() {
-    // Handle escape key to hide window
-    this.window.webContents.on('before-input-event', (event, input) => {
-      if (input.key === 'Escape' && input.type === 'keyDown') {
-        this.window.hide();
+  hideTrafficLightButtons(mainWindow) {
+    try {
+      if (process.platform === 'darwin') {
+        mainWindow.setWindowButtonVisibility(false);
       }
-    });
-  }
-
-  /**
-   * Setup focus management
-   */
-  setupFocusManagement() {
-    this.window.on('focus', () => {
-      console.log('🎯 Main window gained focus');
-    });
-
-    this.window.on('blur', () => {
-      console.log('😴 Main window lost focus');
-    });
-  }
-
-  /**
-   * Setup window state management
-   */
-  setupWindowStateHandlers() {
-    this.window.on('minimize', () => {
-      console.log('📦 Main window minimized');
-    });
-
-    this.window.on('restore', () => {
-      console.log('📤 Main window restored');
-    });
-
-    this.window.on('maximize', () => {
-      console.log('📏 Main window maximized');
-    });
-
-    this.window.on('unmaximize', () => {
-      console.log('📐 Main window unmaximized');
-    });
-  }
-
-  /**
-   * Setup resize handling
-   */
-  setupResizeHandlers() {
-    this.window.on('resize', () => {
-      const bounds = this.window.getBounds();
-      console.log(`📏 Main window resized to: ${bounds.width}x${bounds.height}`);
-      
-      // Could notify layout detection system here
-      if (this.window.webContents) {
-        this.window.webContents.send('window-resized', bounds);
-      }
-    });
-
-    this.window.on('move', () => {
-      const bounds = this.window.getBounds();
-      console.log(`📍 Main window moved to: (${bounds.x}, ${bounds.y})`);
-      
-      if (this.window.webContents) {
-        this.window.webContents.send('window-moved', bounds);
-      }
-    });
-  }
-
-  /**
-   * Setup enter/leave events
-   */
-  setupMouseEvents() {
-    this.window.on('enter-full-screen', () => {
-      console.log('🖥️ Main window entered full screen');
-    });
-
-    this.window.on('leave-full-screen', () => {
-      console.log('🖥️ Main window left full screen');
-    });
-  }
-
-  /**
-   * Force window to front
-   */
-  bringToFront() {
-    if (this.window && !this.window.isDestroyed()) {
-      this.window.show();
-      this.window.focus();
-      this.window.moveTop();
-      console.log('⬆️ Main window brought to front');
+    } catch (error) {
+      console.log('Could not hide window buttons:', error.message);
     }
   }
 
   /**
-   * Flash window for attention
+   * Validates window bounds
+   * @param {Object} bounds - Window bounds to validate
+   * @returns {boolean} True if bounds are valid
    */
-  flashWindow() {
-    if (this.window && !this.window.isDestroyed()) {
-      if (process.platform === 'win32') {
-        this.window.flashFrame(true);
-      } else {
-        // For other platforms, briefly change opacity
-        const originalOpacity = this.window.getOpacity();
-        this.window.setOpacity(0.5);
-        setTimeout(() => {
-          if (this.window && !this.window.isDestroyed()) {
-            this.window.setOpacity(originalOpacity);
-          }
-        }, 150);
-      }
-      console.log('⚡ Main window flashed for attention');
-    }
+  isValidBounds(bounds) {
+    return (
+      typeof bounds.x === 'number' && !isNaN(bounds.x) && isFinite(bounds.x) &&
+      typeof bounds.y === 'number' && !isNaN(bounds.y) && isFinite(bounds.y) &&
+      typeof bounds.width === 'number' && !isNaN(bounds.width) && isFinite(bounds.width) && bounds.width > 0 &&
+      typeof bounds.height === 'number' && !isNaN(bounds.height) && isFinite(bounds.height) && bounds.height > 0
+    );
   }
 
   /**
-   * Get window state for debugging
+   * Creates a main window optimized for performance
+   * @param {Object} options - Additional options
+   * @returns {BrowserWindow} Optimized main window
    */
-  getWindowState() {
-    if (!this.window || this.window.isDestroyed()) {
-      return null;
-    }
-
-    return {
-      isVisible: this.window.isVisible(),
-      isFocused: this.window.isFocused(),
-      isMinimized: this.window.isMinimized(),
-      isMaximized: this.window.isMaximized(),
-      isFullScreen: this.window.isFullScreen(),
-      bounds: this.window.getBounds(),
-      opacity: this.window.getOpacity(),
-      alwaysOnTop: this.window.isAlwaysOnTop(),
-      skipTaskbar: this.window.isSkipTaskbar()
+  async createOptimizedWindow(options = {}) {
+    const optimizedOptions = {
+      webPreferences: {
+        nodeIntegration: true,
+        contextIsolation: false,
+        paintWhenInitiallyHidden: false,
+        backgroundThrottling: false,
+        enableBlinkFeatures: 'OverlayScrollbars', // Better scrollbars
+        disableBlinkFeatures: 'Auxclick' // Disable middle-click features we don't need
+      },
+      ...options
     };
+
+    return this.createWindow(optimizedOptions);
   }
 
   /**
-   * Setup all additional event handlers
+   * Cleanup method
    */
-  setupAllEventHandlers() {
-    this.setupKeyboardHandlers();
-    this.setupFocusManagement();
-    this.setupWindowStateHandlers();
-    this.setupResizeHandlers();
-    this.setupMouseEvents();
-    console.log('✅ All additional main window event handlers setup');
-  }
-
-  /**
-   * Remove all event listeners
-   */
-  removeAllListeners() {
-    if (this.window && !this.window.isDestroyed()) {
-      this.window.removeAllListeners();
-      console.log('🗑️ All main window event listeners removed');
-    }
-  }
-
-  /**
-   * Get event handler debug info
-   */
-  getDebugInfo() {
-    return {
-      hasWindow: !!this.window && !this.window.isDestroyed(),
-      hasWindowManager: !!this.windowManager,
-      hasSettingsService: !!this.settingsService,
-      hasDockService: !!this.dockService,
-      windowState: this.getWindowState(),
-      platform: process.platform
-    };
-  }
-
-  /**
-   * Clean up event handlers
-   */
-  destroy() {
-    console.log('📱 Destroying main window events...');
-    
-    this.removeAllListeners();
-    
-    // Clear references
-    this.window = null;
-    this.windowManager = null;
-    this.settingsService = null;
-    this.dockService = null;
-    
-    console.log('✅ Main window events destroyed');
+  cleanup() {
+    console.log('🧹 MainWindowFactory cleanup...');
+    // No specific cleanup needed currently
   }
 }
 
-module.exports = MainWindowEvents;
+module.exports = MainWindowFactory;
