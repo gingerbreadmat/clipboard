@@ -369,21 +369,17 @@ class WindowManager {
     console.log('🪟 Destroying window manager...');
     
     // Destroy all components
-    this.positionCalculator = null;
-    this.cursorTracker?.destroy();
-    this.displayDetector?.destroy();
-    this.layoutModes?.destroy();
-    
-    this.mainWindowFactory?.destroy();
-    this.settingsWindowFactory?.destroy();
-    this.windowConfig?.destroy();
-    
-    this.mainWindowEvents?.destroy();
-    this.settingsWindowEvents?.destroy();
-    this.windowLifecycle?.destroy();
-    
-    this.nativeBridge?.destroy();
-    this.platformUtils?.destroy();
+    if (this.cursorTracker) this.cursorTracker.destroy();
+    if (this.displayDetector) this.displayDetector.destroy();
+    if (this.layoutModes) this.layoutModes.destroy();
+    if (this.mainWindowFactory) this.mainWindowFactory.destroy();
+    if (this.settingsWindowFactory) this.settingsWindowFactory.destroy();
+    if (this.windowConfig) this.windowConfig.destroy();
+    if (this.mainWindowEvents) this.mainWindowEvents.destroy();
+    if (this.settingsWindowEvents) this.settingsWindowEvents.destroy();
+    if (this.windowLifecycle) this.windowLifecycle.destroy();
+    if (this.nativeBridge) this.nativeBridge.destroy();
+    if (this.platformUtils) this.platformUtils.destroy();
     
     // Clear window references
     this.mainWindow = null;
@@ -394,4 +390,4 @@ class WindowManager {
   }
 }
 
-module.exports = WindowManager;t
+module.exports = WindowManager;
